@@ -2,20 +2,26 @@ package goenum
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
 // Enum represents a basic enum interface
 type Enum interface {
 	String() string
-	Value() int
+	Value() interface{}
 	IsValid() bool
+	Description() string
+	HasAlias(alias string) bool
+	Aliases() []string
 }
 
 // EnumBase provides a basic implementation of Enum interface
 type EnumBase struct {
-	value int
-	name  string
+	value       interface{}
+	name        string
+	description string
+	aliases     []string
 }
 
 // String returns the string representation of the enum
@@ -26,10 +32,10 @@ func (e *EnumBase) String() string {
 	return e.name
 }
 
-// Value returns the numeric value of the enum
-func (e *EnumBase) Value() int {
+// Value returns the value of the enum
+func (e *EnumBase) Value() interface{} {
 	if e == nil {
-		return 0
+		return nil
 	}
 	return e.value
 }
@@ -39,38 +45,91 @@ func (e *EnumBase) IsValid() bool {
 	return e != nil && e.name != ""
 }
 
+// Description returns the description of the enum
+func (e *EnumBase) Description() string {
+	if e == nil {
+		return ""
+	}
+	return e.description
+}
+
+// HasAlias checks if the enum has a specific alias
+func (e *EnumBase) HasAlias(alias string) bool {
+	if e == nil {
+		return false
+	}
+	for _, a := range e.aliases {
+		if strings.EqualFold(a, alias) {
+			return true
+		}
+	}
+	return false
+}
+
+// Aliases returns all aliases of the enum
+func (e *EnumBase) Aliases() []string {
+	if e == nil {
+		return nil
+	}
+	return e.aliases
+}
+
 // NewEnumSet creates a new EnumSet instance
 func NewEnumSet[T Enum]() *EnumSet[T] {
 	return &EnumSet[T]{
-		values: make(map[string]T),
+		values:  make(map[string]T),
+		byValue: make(map[interface{}]T),
 	}
 }
 
 // EnumSet represents a collection of enum values
 type EnumSet[T Enum] struct {
-	values map[string]T
+	values  map[string]T
+	byValue map[interface{}]T
 }
 
 // Register adds an enum value to the set
-func (es *EnumSet[T]) Register(enum T) {
-	es.values[enum.String()] = enum
+func (es *EnumSet[T]) Register(enum T) error {
+	name := enum.String()
+	value := enum.Value()
+
+	// Check for duplicate name
+	if _, exists := es.values[name]; exists {
+		return fmt.Errorf("duplicate enum name: %s", name)
+	}
+
+	// Check for duplicate value
+	if _, exists := es.byValue[value]; exists {
+		return fmt.Errorf("duplicate enum value: %v", value)
+	}
+
+	es.values[name] = enum
+	es.byValue[value] = enum
+	return nil
 }
 
 // GetByName retrieves an enum by its string name
 func (es *EnumSet[T]) GetByName(name string) (T, bool) {
 	enum, exists := es.values[strings.ToUpper(name)]
-	return enum, exists
-}
+	if exists {
+		return enum, true
+	}
 
-// GetByValue retrieves an enum by its integer value
-func (es *EnumSet[T]) GetByValue(value int) (T, bool) {
-	for _, enum := range es.values {
-		if enum.Value() == value {
-			return enum, true
+	// Check aliases
+	for _, e := range es.values {
+		if e.HasAlias(name) {
+			return e, true
 		}
 	}
+
 	var zero T
 	return zero, false
+}
+
+// GetByValue retrieves an enum by its value
+func (es *EnumSet[T]) GetByValue(value interface{}) (T, bool) {
+	enum, exists := es.byValue[value]
+	return enum, exists
 }
 
 // Values returns all registered enum values
@@ -104,4 +163,14 @@ func (e *EnumBase) UnmarshalJSON(data []byte) error {
 	}
 	*e = EnumBase{name: name}
 	return nil
+}
+
+// NewEnumBase creates a new EnumBase with the given parameters
+func NewEnumBase(value interface{}, name string, description string, aliases ...string) *EnumBase {
+	return &EnumBase{
+		value:       value,
+		name:        name,
+		description: description,
+		aliases:     aliases,
+	}
 }

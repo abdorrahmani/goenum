@@ -1,6 +1,9 @@
 package goenum
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // Status represents an example enum type
 type Status struct {
@@ -8,17 +11,23 @@ type Status struct {
 }
 
 var (
-	StatusPending = Status{&EnumBase{value: 0, name: "PENDING"}}
-	StatusActive  = Status{&EnumBase{value: 1, name: "ACTIVE"}}
-	StatusDeleted = Status{&EnumBase{value: 2, name: "DELETED"}}
+	StatusPending = Status{NewEnumBase(0, "PENDING", "The item is waiting to be processed", "WAITING")}
+	StatusActive  = Status{NewEnumBase(1, "ACTIVE", "The item is currently active", "RUNNING", "LIVE")}
+	StatusDeleted = Status{NewEnumBase(2, "DELETED", "The item has been deleted", "REMOVED")}
 )
 
 var StatusEnumSet = NewEnumSet[Status]()
 
 func init() {
-	StatusEnumSet.Register(StatusPending)
-	StatusEnumSet.Register(StatusActive)
-	StatusEnumSet.Register(StatusDeleted)
+	if err := StatusEnumSet.Register(StatusPending); err != nil {
+		panic(fmt.Sprintf("Failed to register StatusPending: %v", err))
+	}
+	if err := StatusEnumSet.Register(StatusActive); err != nil {
+		panic(fmt.Sprintf("Failed to register StatusActive: %v", err))
+	}
+	if err := StatusEnumSet.Register(StatusDeleted); err != nil {
+		panic(fmt.Sprintf("Failed to register StatusDeleted: %v", err))
+	}
 }
 
 // MarshalJSON implements JSON marshaling for Status
@@ -35,4 +44,39 @@ func (s *Status) UnmarshalJSON(data []byte) error {
 		s.EnumBase = &EnumBase{}
 	}
 	return s.EnumBase.UnmarshalJSON(data)
+}
+
+// Example demonstrates the usage of the improved enum package
+func Example() {
+	// Basic enum operations
+	fmt.Printf("Status: %s, Value: %v, Description: %s\n",
+		StatusActive.String(),
+		StatusActive.Value(),
+		StatusActive.Description())
+
+	// Check aliases
+	fmt.Printf("Has alias 'RUNNING': %v\n", StatusActive.HasAlias("RUNNING"))
+	fmt.Printf("All aliases: %v\n", StatusActive.Aliases())
+
+	// EnumSet operations
+	if status, exists := StatusEnumSet.GetByName("ACTIVE"); exists {
+		fmt.Printf("Found by name: %s\n", status.String())
+	}
+
+	if status, exists := StatusEnumSet.GetByValue(1); exists {
+		fmt.Printf("Found by value: %s\n", status.String())
+	}
+
+	// Try finding by alias
+	if status, exists := StatusEnumSet.GetByName("WAITING"); exists {
+		fmt.Printf("Found by alias: %s\n", status.String())
+	}
+
+	// JSON operations
+	jsonData, _ := json.Marshal(StatusActive)
+	fmt.Printf("JSON: %s\n", jsonData)
+
+	var status Status
+	_ = json.Unmarshal([]byte(`"PENDING"`), &status)
+	fmt.Printf("Unmarshaled: %s\n", status.String())
 }
