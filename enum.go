@@ -157,11 +157,15 @@ func (e *EnumBase) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements JSON unmarshaling for enum
 func (e *EnumBase) UnmarshalJSON(data []byte) error {
+	if e == nil {
+		return fmt.Errorf("cannot unmarshal into nil EnumBase")
+	}
+
 	var name string
 	if err := json.Unmarshal(data, &name); err != nil {
 		return err
 	}
-	*e = EnumBase{name: name}
+	e.name = name
 	return nil
 }
 
