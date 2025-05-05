@@ -1,5 +1,12 @@
 # GoEnum - A Type-Safe Enum Library for Go
 
+[![Go Version](https://img.shields.io/badge/Go-1.18%2B-00ADD8?logo=go&logoColor=white)](https://golang.org/dl/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/abdorrahmani/goenum)](https://goreportcard.com/report/github.com/abdorrahmani/goenum)
+[![License: MIT](https://img.shields.io/github/license/abdorrahmani/goenum?logo=open-source-initiative&logoColor=white)](https://github.com/abdorrahmani/goenum/blob/main/LICENSE)
+[![Coverage](https://img.shields.io/codecov/c/github/abdorrahmani/goenum?logo=codecov)](https://codecov.io/gh/abdorrahmani/goenum)
+[![GoDoc](https://img.shields.io/badge/godoc-reference-blue?logo=go&logoColor=white)](https://pkg.go.dev/github.com/abdorrahmani/goenum)
+[![GitHub stars](https://img.shields.io/github/stars/abdorrahmani/goenum?style=social)](https://github.com/abdorrahmani/goenum/stargazers)
+
 GoEnum is a robust, type-safe enumeration library for Go that leverages generics (Go 1.18+) to provide a clean, efficient, and maintainable way to work with enums. It offers a complete solution for defining enum types, managing sets of enum values, and handling common operations including JSON serialization.
 
 ## Table of Contents
