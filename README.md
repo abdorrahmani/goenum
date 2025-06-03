@@ -15,19 +15,32 @@ GoEnum is a powerful, type-safe enumeration library for Go that leverages generi
 - **Flexible Values**: Support for both integer and string-based enum values
 - **Rich Metadata**: Built-in support for descriptions and aliases
 - **Efficient Lookups**: Fast value and name-based lookups using maps
-- **JSON Support**: Full JSON marshaling/unmarshaling support
+- **JSON Support**: Full JSON marshaling/unmarshaling support with multiple formats
 - **Nil Safety**: All methods handle nil cases gracefully
 - **Validation**: Built-in duplicate value/name checking
 - **Extensible**: Easy to extend for custom enum types
 - **Well Tested**: Comprehensive test coverage
 - **Clean API**: Idiomatic Go code with intuitive interface
+- **Composite Enums**: Support for bitwise operations and flag combinations
+- **Dynamic Loading**: Load enums from JSON files, maps, or slices
 
 ## 📋 Table of Contents
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Basic Usage](#basic-usage)
+  - [Defining Enum Types](#1-defining-enum-types)
+  - [Creating Enum Sets](#2-creating-enum-sets)
+  - [Working with Aliases](#3-working-with-aliases)
 - [Advanced Features](#advanced-features)
+  - [JSON Serialization](#1-json-serialization)
+  - [String-Based Enums](#2-string-based-enums)
+  - [Multiple Aliases](#3-multiple-aliases)
+  - [Dynamic Enum Loading](#4-dynamic-enum-loading)
+- [Composite Enum Support](#composite-enum-support)
+  - [Creating Composite Enums](#creating-composite-enums)
+  - [Bitwise Operations](#bitwise-operations)
+  - [Type Conversion](#type-conversion)
 - [API Reference](#api-reference)
 - [Best Practices](#best-practices)
 - [Contributing](#contributing)
@@ -110,7 +123,7 @@ var (
 )
 ```
 
-### 2. Creating and Using Enum Sets
+### 2. Creating Enum Sets
 
 ```go
 var Statuses = goenum.NewEnumSet[Status]()
@@ -148,15 +161,40 @@ fmt.Println(StatusActive.Aliases()) // ["RUNNING"]
 
 ### 1. JSON Serialization
 
+The library supports three JSON serialization formats:
+- `JSONFormatName` (default): Serializes only the enum name
+- `JSONFormatValue`: Serializes only the enum value
+- `JSONFormatFull`: Serializes a complete struct with name, value, description, and aliases
+
 ```go
-// Marshal to JSON
+// Default format (name only)
 data, _ := json.Marshal(StatusActive)
 fmt.Println(string(data)) // "ACTIVE"
 
-// Unmarshal from JSON
+// Value format
+StatusActive.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatValue})
+data, _ = json.Marshal(StatusActive)
+fmt.Println(string(data)) // 1
+
+// Full format
+StatusActive.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatFull})
+data, _ = json.Marshal(StatusActive)
+fmt.Println(string(data)) // {"name":"ACTIVE","value":1,"description":"Currently active","aliases":["RUNNING"]}
+
+// Unmarshal examples
 var status Status
+status.EnumBase = &EnumBase{}
+
+// Unmarshal name format
 json.Unmarshal([]byte(`"PENDING"`), &status)
-fmt.Println(status.String()) // "PENDING"
+
+// Unmarshal value format
+status.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatValue})
+json.Unmarshal([]byte(`1`), &status)
+
+// Unmarshal full format
+status.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatFull})
+json.Unmarshal([]byte(`{"name":"ACTIVE","value":1,"description":"Currently active","aliases":["RUNNING"]}`), &status)
 ```
 
 ### 2. String-Based Enums
@@ -185,6 +223,116 @@ fmt.Println(StatusActive.HasAlias("ONLINE"))  // true
 fmt.Println(StatusActive.Aliases())           // ["RUNNING", "LIVE", "ONLINE"]
 ```
 
+### 4. Dynamic Enum Loading
+
+The library supports loading enums from various sources:
+
+```go
+// Create a loader
+loader := goenum.NewDynamicEnumLoader()
+
+// Load from JSON file
+err := loader.LoadFromJSON("enums.json")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Load from directory (all JSON files)
+err = loader.LoadFromDirectory("enums/")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Load from map
+definitions := map[string]goenum.EnumDefinition{
+    "TEST_A": {
+        Name:        "TEST_A",
+        Value:       1,
+        Description: "Test enum A",
+        Aliases:     []string{"ALPHA"},
+    },
+}
+err = loader.LoadFromMap(definitions)
+
+// Load from slice
+definitions := []goenum.EnumDefinition{
+    {
+        Name:        "TEST_A",
+        Value:       1,
+        Description: "Test enum A",
+        Aliases:     []string{"ALPHA"},
+    },
+}
+err = loader.LoadFromSlice(definitions)
+
+// Export to JSON
+err = loader.ExportToJSON("exported_enums.json")
+```
+
+Example JSON format for enum definitions:
+```json
+[
+  {
+    "name": "TEST_A",
+    "value": 1,
+    "description": "Test enum A",
+    "aliases": ["ALPHA"]
+  },
+  {
+    "name": "TEST_B",
+    "value": 2,
+    "description": "Test enum B",
+    "aliases": ["BETA"]
+  }
+]
+```
+
+## Composite Enum Support
+
+The library supports composite enums that can be combined using bitwise operations. This is particularly useful for flag-based enums where multiple values can be combined.
+
+### Creating Composite Enums
+
+```go
+var (
+    FlagA = NewCompositeEnumBase(0, "FLAG_A", "First flag")
+    FlagB = NewCompositeEnumBase(1, "FLAG_B", "Second flag")
+    FlagC = NewCompositeEnumBase(2, "FLAG_C", "Third flag")
+)
+```
+
+### Bitwise Operations
+
+Composite enums support the following bitwise operations:
+
+- `Or(other CompositeEnum)`: Combines two flags using bitwise OR
+- `And(other CompositeEnum)`: Combines two flags using bitwise AND
+- `Xor(other CompositeEnum)`: Combines two flags using bitwise XOR
+- `Not()`: Inverts the flags using bitwise NOT
+
+Example:
+```go
+// Combine flags
+combined := FlagA.Or(FlagB)  // Results in "FLAG_A|FLAG_B"
+
+// Check if a flag is set
+if combined.HasFlag(FlagA) {
+    // FlagA is set
+}
+
+// Check if flags are empty
+if !combined.IsEmpty() {
+    // Flags are not empty
+}
+```
+
+### Type Conversion
+
+The `NewCompositeEnumBase` function accepts various types for the flag value:
+- `uint64`: Direct flag value
+- `int`: Bit position (value will be 1 << position)
+- Other types: Will result in a zero value
+
 ## 📚 API Reference
 
 ### Enum Interface
@@ -208,6 +356,9 @@ type Enum interface {
 - `GetByValue(value interface{}) (T, bool)`: Retrieves enum by value
 - `Contains(enum T) bool`: Checks if enum exists in set
 - `Values() []T`: Returns all registered enum values
+- `Names() []string`: Returns a slice of all enum names
+- `Map() map[string]interface{}`: Returns a map of enum names to their values
+- `Filter(predicate func(T) bool) []T`: Returns a slice of enums that satisfy the given predicate
 
 ## 💡 Best Practices
 
@@ -219,6 +370,8 @@ type Enum interface {
 6. **Type Safety**: Use type-safe enums for better compile-time checking
 7. **JSON**: Implement custom JSON methods when embedding in structs
 8. **Validation**: Keep enum values unique within a set
+9. **Composite Enums**: Use bitwise operations for flag combinations
+10. **Dynamic Loading**: Validate enum definitions before loading
 
 ## 🤝 Contributing
 
@@ -246,4 +399,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Inspired by enum implementations in Java and C#
 - Uses `github.com/stretchr/testify` for testing
 - Created with ❤️ by [abdorrahmani](https://github.com/abdorrahmani)
-
