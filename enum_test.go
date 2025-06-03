@@ -21,127 +21,157 @@ var (
 var TestEnumSet = NewEnumSet[TestEnum]()
 
 func init() {
-	if err := TestEnumSet.Register(TestEnumA); err != nil {
-		panic(err)
-	}
-	if err := TestEnumSet.Register(TestEnumB); err != nil {
-		panic(err)
-	}
-	if err := TestEnumSet.Register(TestEnumC); err != nil {
-		panic(err)
-	}
+	// Using chainable Register method
+	TestEnumSet.Register(TestEnumA).
+		Register(TestEnumB).
+		Register(TestEnumC)
 }
 
 func TestEnumBasics(t *testing.T) {
-	// Test basic properties
-	assert.Equal(t, "A", TestEnumA.String())
-	assert.Equal(t, 1, TestEnumA.Value())
-	assert.True(t, TestEnumA.IsValid())
-	assert.Equal(t, "First enum", TestEnumA.Description())
+	t.Run("valid enum properties", func(t *testing.T) {
+		assert.Equal(t, "A", TestEnumA.String(), "String() should return the enum name")
+		assert.Equal(t, 1, TestEnumA.Value(), "Value() should return the enum value")
+		assert.True(t, TestEnumA.IsValid(), "IsValid() should return true for valid enum")
+		assert.Equal(t, "First enum", TestEnumA.Description(), "Description() should return the enum description")
+	})
 
-	// Test nil enum
-	var nilEnum TestEnum
-	assert.Equal(t, "", nilEnum.String())
-	assert.Nil(t, nilEnum.Value())
-	assert.False(t, nilEnum.IsValid())
-	assert.Equal(t, "", nilEnum.Description())
+	t.Run("nil enum properties", func(t *testing.T) {
+		var nilEnum TestEnum
+		assert.Equal(t, "", nilEnum.String(), "String() should return empty string for nil enum")
+		assert.Nil(t, nilEnum.Value(), "Value() should return nil for nil enum")
+		assert.False(t, nilEnum.IsValid(), "IsValid() should return false for nil enum")
+		assert.Equal(t, "", nilEnum.Description(), "Description() should return empty string for nil enum")
+	})
 }
 
 func TestEnumAliases(t *testing.T) {
-	// Test alias operations
-	assert.True(t, TestEnumA.HasAlias("ALPHA"))
-	assert.False(t, TestEnumA.HasAlias("BETA"))
-	assert.Equal(t, []string{"ALPHA"}, TestEnumA.Aliases())
+	t.Run("single alias operations", func(t *testing.T) {
+		assert.True(t, TestEnumA.HasAlias("ALPHA"), "HasAlias() should return true for existing alias")
+		assert.False(t, TestEnumA.HasAlias("BETA"), "HasAlias() should return false for non-existing alias")
+		assert.Equal(t, []string{"ALPHA"}, TestEnumA.Aliases(), "Aliases() should return all aliases")
+	})
 
-	// Test multiple aliases
-	assert.True(t, TestEnumC.HasAlias("CHARLIE"))
-	assert.True(t, TestEnumC.HasAlias("THIRD"))
-	assert.ElementsMatch(t, []string{"CHARLIE", "THIRD"}, TestEnumC.Aliases())
+	t.Run("multiple aliases operations", func(t *testing.T) {
+		assert.True(t, TestEnumC.HasAlias("CHARLIE"), "HasAlias() should return true for first alias")
+		assert.True(t, TestEnumC.HasAlias("THIRD"), "HasAlias() should return true for second alias")
+		assert.ElementsMatch(t, []string{"CHARLIE", "THIRD"}, TestEnumC.Aliases(), "Aliases() should return all aliases in any order")
+	})
 
-	// Test case insensitivity
-	assert.True(t, TestEnumA.HasAlias("alpha"))
-	assert.True(t, TestEnumA.HasAlias("ALPHA"))
+	t.Run("case insensitive alias matching", func(t *testing.T) {
+		assert.True(t, TestEnumA.HasAlias("alpha"), "HasAlias() should match case-insensitive alias")
+		assert.True(t, TestEnumA.HasAlias("ALPHA"), "HasAlias() should match uppercase alias")
+		assert.True(t, TestEnumA.HasAlias("Alpha"), "HasAlias() should match mixed-case alias")
+	})
 }
 
 func TestEnumSetOperations(t *testing.T) {
-	// Test GetByName
-	enum, exists := TestEnumSet.GetByName("A")
-	assert.True(t, exists)
-	assert.Equal(t, TestEnumA, enum)
+	t.Run("get by name", func(t *testing.T) {
+		enum, exists := TestEnumSet.GetByName("A")
+		assert.True(t, exists, "GetByName() should find enum by exact name")
+		assert.Equal(t, TestEnumA, enum, "GetByName() should return correct enum")
 
-	// Test GetByName with alias
-	enum, exists = TestEnumSet.GetByName("ALPHA")
-	assert.True(t, exists)
-	assert.Equal(t, TestEnumA, enum)
+		enum, exists = TestEnumSet.GetByName("INVALID")
+		assert.False(t, exists, "GetByName() should return false for invalid name")
+	})
 
-	// Test GetByValue
-	enum, exists = TestEnumSet.GetByValue(2)
-	assert.True(t, exists)
-	assert.Equal(t, TestEnumB, enum)
+	t.Run("get by alias", func(t *testing.T) {
+		enum, exists := TestEnumSet.GetByName("ALPHA")
+		assert.True(t, exists, "GetByName() should find enum by alias")
+		assert.Equal(t, TestEnumA, enum, "GetByName() should return correct enum for alias")
+	})
 
-	// Test Contains
-	assert.True(t, TestEnumSet.Contains(TestEnumA))
-	assert.False(t, TestEnumSet.Contains(TestEnum{NewEnumBase(99, "INVALID", "Invalid enum")}))
+	t.Run("get by value", func(t *testing.T) {
+		enum, exists := TestEnumSet.GetByValue(2)
+		assert.True(t, exists, "GetByValue() should find enum by value")
+		assert.Equal(t, TestEnumB, enum, "GetByValue() should return correct enum")
 
-	// Test Values
-	values := TestEnumSet.Values()
-	assert.Len(t, values, 3)
-	assert.Contains(t, values, TestEnumA)
-	assert.Contains(t, values, TestEnumB)
-	assert.Contains(t, values, TestEnumC)
+		enum, exists = TestEnumSet.GetByValue(99)
+		assert.False(t, exists, "GetByValue() should return false for invalid value")
+	})
+
+	t.Run("contains check", func(t *testing.T) {
+		assert.True(t, TestEnumSet.Contains(TestEnumA), "Contains() should return true for registered enum")
+		assert.False(t, TestEnumSet.Contains(TestEnum{NewEnumBase(99, "INVALID", "Invalid enum")}), "Contains() should return false for unregistered enum")
+	})
+
+	t.Run("values retrieval", func(t *testing.T) {
+		values := TestEnumSet.Values()
+		assert.Len(t, values, 3, "Values() should return all registered enums")
+		assert.Contains(t, values, TestEnumA, "Values() should contain first enum")
+		assert.Contains(t, values, TestEnumB, "Values() should contain second enum")
+		assert.Contains(t, values, TestEnumC, "Values() should contain third enum")
+	})
 }
 
 func TestEnumSetRegistration(t *testing.T) {
-	// Test duplicate name registration
-	duplicateSet := NewEnumSet[TestEnum]()
-	err := duplicateSet.Register(TestEnumA)
-	assert.NoError(t, err)
+	t.Run("duplicate name registration", func(t *testing.T) {
+		duplicateSet := NewEnumSet[TestEnum]()
+		duplicateSet.Register(TestEnumA)
 
-	duplicate := TestEnum{NewEnumBase(99, "A", "Duplicate enum")}
-	err = duplicateSet.Register(duplicate)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate enum name")
+		duplicate := TestEnum{NewEnumBase(99, "A", "Duplicate enum")}
+		assert.Panics(t, func() {
+			duplicateSet.Register(duplicate)
+		}, "Register() should panic on duplicate name")
+	})
 
-	// Test duplicate value registration
-	duplicate = TestEnum{NewEnumBase(1, "DUPLICATE", "Duplicate value")}
-	err = duplicateSet.Register(duplicate)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate enum value")
+	t.Run("duplicate value registration", func(t *testing.T) {
+		duplicateSet := NewEnumSet[TestEnum]()
+		duplicateSet.Register(TestEnumA)
+
+		duplicate := TestEnum{NewEnumBase(1, "DUPLICATE", "Duplicate value")}
+		assert.Panics(t, func() {
+			duplicateSet.Register(duplicate)
+		}, "Register() should panic on duplicate value")
+	})
+
+	t.Run("chainable registration", func(t *testing.T) {
+		set := NewEnumSet[TestEnum]()
+		result := set.Register(TestEnumA).Register(TestEnumB)
+		assert.Equal(t, set, result, "Register() should return the same EnumSet for chaining")
+		assert.True(t, set.Contains(TestEnumA), "Chained Register() should register first enum")
+		assert.True(t, set.Contains(TestEnumB), "Chained Register() should register second enum")
+	})
 }
 
 func TestJSONMarshaling(t *testing.T) {
-	// Test JSON marshaling
-	data, err := json.Marshal(TestEnumA)
-	assert.NoError(t, err)
-	assert.Equal(t, `"A"`, string(data))
+	t.Run("marshal valid enum", func(t *testing.T) {
+		data, err := json.Marshal(TestEnumA)
+		assert.NoError(t, err, "Marshal() should not return error for valid enum")
+		assert.Equal(t, `"A"`, string(data), "Marshal() should return enum name as JSON string")
+	})
 
-	// Test JSON marshaling of nil enum
-	var nilEnum TestEnum
-	data, err = json.Marshal(nilEnum)
-	assert.NoError(t, err)
-	assert.Equal(t, `""`, string(data))
+	t.Run("marshal nil enum", func(t *testing.T) {
+		var nilEnum TestEnum
+		data, err := json.Marshal(nilEnum)
+		assert.NoError(t, err, "Marshal() should not return error for nil enum")
+		assert.Equal(t, `""`, string(data), "Marshal() should return empty string for nil enum")
+	})
 
-	// Test JSON unmarshaling
-	var enum TestEnum
-	enum.EnumBase = &EnumBase{} // Initialize EnumBase
-	err = json.Unmarshal([]byte(`"A"`), &enum)
-	assert.NoError(t, err)
-	assert.Equal(t, TestEnumA.String(), enum.String())
+	t.Run("unmarshal valid enum", func(t *testing.T) {
+		var enum TestEnum
+		enum.EnumBase = &EnumBase{} // Initialize EnumBase
+		err := json.Unmarshal([]byte(`"A"`), &enum)
+		assert.NoError(t, err, "Unmarshal() should not return error for valid JSON")
+		assert.Equal(t, TestEnumA.String(), enum.String(), "Unmarshal() should set correct enum name")
+	})
 
-	// Test JSON unmarshaling of empty string
-	err = json.Unmarshal([]byte(`""`), &enum)
-	assert.NoError(t, err)
-	assert.False(t, enum.IsValid())
+	t.Run("unmarshal empty string", func(t *testing.T) {
+		var enum TestEnum
+		enum.EnumBase = &EnumBase{} // Initialize EnumBase
+		err := json.Unmarshal([]byte(`""`), &enum)
+		assert.NoError(t, err, "Unmarshal() should not return error for empty string")
+		assert.False(t, enum.IsValid(), "Unmarshal() should result in invalid enum for empty string")
+	})
 
-	// Test JSON unmarshaling into nil EnumBase
-	var nilBaseEnum TestEnum
-	err = json.Unmarshal([]byte(`"A"`), &nilBaseEnum)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot unmarshal into nil EnumBase")
+	t.Run("unmarshal into nil EnumBase", func(t *testing.T) {
+		var nilBaseEnum TestEnum
+		err := json.Unmarshal([]byte(`"A"`), &nilBaseEnum)
+		assert.Error(t, err, "Unmarshal() should return error for nil EnumBase")
+		assert.Contains(t, err.Error(), "cannot unmarshal into nil EnumBase", "Error message should indicate nil EnumBase")
+	})
 }
 
 func TestStringBasedEnum(t *testing.T) {
-	// Test string-based enum values
 	type StringEnum struct {
 		*EnumBase
 	}
@@ -151,45 +181,49 @@ func TestStringBasedEnum(t *testing.T) {
 		StringEnumB = StringEnum{NewEnumBase("b", "B", "Second string enum", "BETA")}
 	)
 
-	stringSet := NewEnumSet[StringEnum]()
-	assert.NoError(t, stringSet.Register(StringEnumA))
-	assert.NoError(t, stringSet.Register(StringEnumB))
+	t.Run("string value operations", func(t *testing.T) {
+		assert.Equal(t, "a", StringEnumA.Value(), "Value() should return string value")
+		assert.Equal(t, "b", StringEnumB.Value(), "Value() should return string value")
+	})
 
-	// Test value operations
-	assert.Equal(t, "a", StringEnumA.Value())
-	assert.Equal(t, "b", StringEnumB.Value())
+	t.Run("string value lookup", func(t *testing.T) {
+		stringSet := NewEnumSet[StringEnum]()
+		stringSet.Register(StringEnumA).Register(StringEnumB)
 
-	// Test lookup by string value
-	enum, exists := stringSet.GetByValue("a")
-	assert.True(t, exists)
-	assert.Equal(t, StringEnumA, enum)
+		enum, exists := stringSet.GetByValue("a")
+		assert.True(t, exists, "GetByValue() should find enum by string value")
+		assert.Equal(t, StringEnumA, enum, "GetByValue() should return correct enum for string value")
+
+		enum, exists = stringSet.GetByValue("invalid")
+		assert.False(t, exists, "GetByValue() should return false for invalid string value")
+	})
 }
 
 func TestEnumSetEdgeCases(t *testing.T) {
-	// Test empty enum set
-	emptySet := NewEnumSet[TestEnum]()
-	assert.Empty(t, emptySet.Values())
+	t.Run("empty enum set", func(t *testing.T) {
+		emptySet := NewEnumSet[TestEnum]()
+		assert.Empty(t, emptySet.Values(), "Values() should return empty slice for new set")
+		assert.False(t, emptySet.Contains(TestEnumA), "Contains() should return false for empty set")
+	})
 
-	// Test lookup in empty set
-	_, exists := emptySet.GetByName("A")
-	assert.False(t, exists)
+	t.Run("invalid lookups", func(t *testing.T) {
+		_, exists := TestEnumSet.GetByName("INVALID")
+		assert.False(t, exists, "GetByName() should return false for invalid name")
 
-	// Test lookup with invalid name
-	_, exists = TestEnumSet.GetByName("INVALID")
-	assert.False(t, exists)
-
-	// Test lookup with invalid value
-	_, exists = TestEnumSet.GetByValue(99)
-	assert.False(t, exists)
+		_, exists = TestEnumSet.GetByValue(99)
+		assert.False(t, exists, "GetByValue() should return false for invalid value")
+	})
 }
 
 func TestEnumDescription(t *testing.T) {
-	// Test description operations
-	assert.Equal(t, "First enum", TestEnumA.Description())
-	assert.Equal(t, "Second enum", TestEnumB.Description())
-	assert.Equal(t, "Third enum", TestEnumC.Description())
+	t.Run("description operations", func(t *testing.T) {
+		assert.Equal(t, "First enum", TestEnumA.Description(), "Description() should return first enum description")
+		assert.Equal(t, "Second enum", TestEnumB.Description(), "Description() should return second enum description")
+		assert.Equal(t, "Third enum", TestEnumC.Description(), "Description() should return third enum description")
+	})
 
-	// Test empty description
-	emptyDesc := TestEnum{NewEnumBase(99, "EMPTY", "")}
-	assert.Equal(t, "", emptyDesc.Description())
+	t.Run("empty description", func(t *testing.T) {
+		emptyDesc := TestEnum{NewEnumBase(99, "EMPTY", "")}
+		assert.Equal(t, "", emptyDesc.Description(), "Description() should return empty string for empty description")
+	})
 }
