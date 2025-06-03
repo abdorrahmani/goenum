@@ -19,15 +19,10 @@ var (
 var StatusEnumSet = NewEnumSet[Status]()
 
 func init() {
-	if err := StatusEnumSet.Register(StatusPending); err != nil {
-		panic(fmt.Sprintf("Failed to register StatusPending: %v", err))
-	}
-	if err := StatusEnumSet.Register(StatusActive); err != nil {
-		panic(fmt.Sprintf("Failed to register StatusActive: %v", err))
-	}
-	if err := StatusEnumSet.Register(StatusDeleted); err != nil {
-		panic(fmt.Sprintf("Failed to register StatusDeleted: %v", err))
-	}
+	// Using chainable Register method
+	StatusEnumSet.Register(StatusPending).
+		Register(StatusActive).
+		Register(StatusDeleted)
 }
 
 // MarshalJSON implements JSON marshaling for Status

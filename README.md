@@ -116,10 +116,17 @@ var (
 var Statuses = goenum.NewEnumSet[Status]()
 
 func init() {
-    Statuses.Register(StatusPending)
-    Statuses.Register(StatusActive)
-    Statuses.Register(StatusDeleted)
+    // Using chainable Register method
+    Statuses.Register(StatusPending).
+        Register(StatusActive).
+        Register(StatusDeleted)
 }
+
+// Or in a single line
+var Colors = goenum.NewEnumSet[Color]().
+    Register(ColorRed).
+    Register(ColorBlue).
+    Register(ColorGreen)
 
 // Usage
 if status, exists := Statuses.GetByName("ACTIVE"); exists {

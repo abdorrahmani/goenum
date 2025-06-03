@@ -88,24 +88,24 @@ type EnumSet[T Enum] struct {
 	byValue map[interface{}]T
 }
 
-// Register adds an enum value to the set
-func (es *EnumSet[T]) Register(enum T) error {
+// Register adds an enum value to the set and returns the EnumSet for chaining
+func (es *EnumSet[T]) Register(enum T) *EnumSet[T] {
 	name := enum.String()
 	value := enum.Value()
 
 	// Check for duplicate name
 	if _, exists := es.values[name]; exists {
-		return fmt.Errorf("duplicate enum name: %s", name)
+		panic(fmt.Sprintf("duplicate enum name: %s", name))
 	}
 
 	// Check for duplicate value
 	if _, exists := es.byValue[value]; exists {
-		return fmt.Errorf("duplicate enum value: %v", value)
+		panic(fmt.Sprintf("duplicate enum value: %v", value))
 	}
 
 	es.values[name] = enum
 	es.byValue[value] = enum
-	return nil
+	return es
 }
 
 // GetByName retrieves an enum by its string name
