@@ -178,3 +178,32 @@ func NewEnumBase(value interface{}, name string, description string, aliases ...
 		aliases:     aliases,
 	}
 }
+
+// Names returns a slice of all enum names in the set
+func (es *EnumSet[T]) Names() []string {
+	names := make([]string, 0, len(es.values))
+	for name := range es.values {
+		names = append(names, name)
+	}
+	return names
+}
+
+// Map returns a map of enum names to their values
+func (es *EnumSet[T]) Map() map[string]interface{} {
+	result := make(map[string]interface{}, len(es.values))
+	for name, enum := range es.values {
+		result[name] = enum.Value()
+	}
+	return result
+}
+
+// Filter returns a slice of enums that satisfy the given predicate
+func (es *EnumSet[T]) Filter(predicate func(T) bool) []T {
+	result := make([]T, 0)
+	for _, enum := range es.values {
+		if predicate(enum) {
+			result = append(result, enum)
+		}
+	}
+	return result
+}

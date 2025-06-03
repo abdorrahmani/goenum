@@ -74,4 +74,14 @@ func Example() {
 	var status Status
 	_ = json.Unmarshal([]byte(`"PENDING"`), &status)
 	fmt.Printf("Unmarshaled: %s\n", status.String())
+
+	// New utility methods examples
+	fmt.Printf("All status names: %v\n", StatusEnumSet.Names())
+	fmt.Printf("Status map: %v\n", StatusEnumSet.Map())
+
+	// Filter active and pending statuses
+	activeStatuses := StatusEnumSet.Filter(func(s Status) bool {
+		return s.Value().(int) < 2 // Filter statuses with value less than 2
+	})
+	fmt.Printf("Active statuses: %v\n", activeStatuses)
 }

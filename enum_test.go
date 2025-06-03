@@ -227,3 +227,39 @@ func TestEnumDescription(t *testing.T) {
 		assert.Equal(t, "", emptyDesc.Description(), "Description() should return empty string for empty description")
 	})
 }
+
+func TestEnumSetUtilityMethods(t *testing.T) {
+	t.Run("Names() method", func(t *testing.T) {
+		names := TestEnumSet.Names()
+		assert.Len(t, names, 3, "Names() should return all enum names")
+		assert.Contains(t, names, "A", "Names() should contain first enum name")
+		assert.Contains(t, names, "B", "Names() should contain second enum name")
+		assert.Contains(t, names, "C", "Names() should contain third enum name")
+	})
+
+	t.Run("Map() method", func(t *testing.T) {
+		enumMap := TestEnumSet.Map()
+		assert.Len(t, enumMap, 3, "Map() should return map with all enums")
+		assert.Equal(t, 1, enumMap["A"], "Map() should contain correct value for first enum")
+		assert.Equal(t, 2, enumMap["B"], "Map() should contain correct value for second enum")
+		assert.Equal(t, 3, enumMap["C"], "Map() should contain correct value for third enum")
+	})
+
+	t.Run("Filter() method", func(t *testing.T) {
+		// Filter enums with value greater than 1
+		filtered := TestEnumSet.Filter(func(e TestEnum) bool {
+			return e.Value().(int) > 1
+		})
+		assert.Len(t, filtered, 2, "Filter() should return correct number of filtered enums")
+		assert.Contains(t, filtered, TestEnumB, "Filter() should contain second enum")
+		assert.Contains(t, filtered, TestEnumC, "Filter() should contain third enum")
+		assert.NotContains(t, filtered, TestEnumA, "Filter() should not contain first enum")
+
+		// Filter enums with specific description
+		filtered = TestEnumSet.Filter(func(e TestEnum) bool {
+			return e.Description() == "First enum"
+		})
+		assert.Len(t, filtered, 1, "Filter() should return single enum with matching description")
+		assert.Contains(t, filtered, TestEnumA, "Filter() should contain enum with matching description")
+	})
+}
