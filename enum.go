@@ -16,6 +16,19 @@ type Enum interface {
 	Aliases() []string
 }
 
+// CompositeEnum represents an enum that can be combined with other enums
+type CompositeEnum interface {
+	Enum
+	// Bitwise operations
+	Or(other CompositeEnum) CompositeEnum
+	And(other CompositeEnum) CompositeEnum
+	Xor(other CompositeEnum) CompositeEnum
+	Not() CompositeEnum
+	// Checks
+	HasFlag(flag CompositeEnum) bool
+	IsEmpty() bool
+}
+
 // JSONFormat defines how an enum should be serialized to JSON
 type JSONFormat int
 
@@ -305,4 +318,108 @@ func (es *EnumSet[T]) Filter(predicate func(T) bool) []T {
 		}
 	}
 	return result
+}
+
+// CompositeEnumBase provides a basic implementation of CompositeEnum interface
+type CompositeEnumBase struct {
+	*EnumBase
+	flags uint64
+}
+
+// NewCompositeEnumBase creates a new CompositeEnumBase with the given parameters
+func NewCompositeEnumBase(value interface{}, name string, description string, aliases ...string) *CompositeEnumBase {
+	flags, ok := value.(uint64)
+	if !ok {
+		// If value is not uint64, use 1 << value as the flag
+		if intVal, ok := value.(int); ok {
+			flags = 1 << uint(intVal)
+		} else {
+			flags = 0
+		}
+	}
+	return &CompositeEnumBase{
+		EnumBase: NewEnumBase(flags, name, description, aliases...),
+		flags:    flags,
+	}
+}
+
+// Or performs a bitwise OR operation with another enum
+func (e *CompositeEnumBase) Or(other CompositeEnum) CompositeEnum {
+	if e == nil || other == nil {
+		return e
+	}
+	otherBase, ok := other.(*CompositeEnumBase)
+	if !ok {
+		return e
+	}
+	return &CompositeEnumBase{
+		EnumBase: NewEnumBase(e.flags|otherBase.flags, e.name+"|"+other.String(), e.description),
+		flags:    e.flags | otherBase.flags,
+	}
+}
+
+// And performs a bitwise AND operation with another enum
+func (e *CompositeEnumBase) And(other CompositeEnum) CompositeEnum {
+	if e == nil || other == nil {
+		return e
+	}
+	otherBase, ok := other.(*CompositeEnumBase)
+	if !ok {
+		return e
+	}
+	return &CompositeEnumBase{
+		EnumBase: NewEnumBase(e.flags&otherBase.flags, e.name+"&"+other.String(), e.description),
+		flags:    e.flags & otherBase.flags,
+	}
+}
+
+// Xor performs a bitwise XOR operation with another enum
+func (e *CompositeEnumBase) Xor(other CompositeEnum) CompositeEnum {
+	if e == nil || other == nil {
+		return e
+	}
+	otherBase, ok := other.(*CompositeEnumBase)
+	if !ok {
+		return e
+	}
+	return &CompositeEnumBase{
+		EnumBase: NewEnumBase(e.flags^otherBase.flags, e.name+"^"+other.String(), e.description),
+		flags:    e.flags ^ otherBase.flags,
+	}
+}
+
+// Not performs a bitwise NOT operation
+func (e *CompositeEnumBase) Not() CompositeEnum {
+	if e == nil {
+		return e
+	}
+	return &CompositeEnumBase{
+		EnumBase: NewEnumBase(^e.flags, "~"+e.name, e.description),
+		flags:    ^e.flags,
+	}
+}
+
+// HasFlag checks if the enum has a specific flag set
+func (e *CompositeEnumBase) HasFlag(flag CompositeEnum) bool {
+	if e == nil || flag == nil {
+		return false
+	}
+	flagBase, ok := flag.(*CompositeEnumBase)
+	if !ok {
+		return false
+	}
+	return (e.flags & flagBase.flags) == flagBase.flags
+}
+
+// IsEmpty checks if the enum has no flags set
+func (e *CompositeEnumBase) IsEmpty() bool {
+	return e == nil || e.flags == 0
+}
+
+// Value returns the flags value
+func (e *CompositeEnumBase) Value() interface{} {
+	if e == nil {
+		return nil
+	}
+	return e.flags
 }

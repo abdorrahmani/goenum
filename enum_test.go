@@ -292,3 +292,75 @@ func TestEnumSetUtilityMethods(t *testing.T) {
 		assert.Contains(t, filtered, TestEnumA, "Filter() should contain enum with matching description")
 	})
 }
+
+func TestCompositeEnum(t *testing.T) {
+	// Define test flags
+	var (
+		FlagA = NewCompositeEnumBase(0, "FLAG_A", "First flag")
+		FlagB = NewCompositeEnumBase(1, "FLAG_B", "Second flag")
+		FlagC = NewCompositeEnumBase(2, "FLAG_C", "Third flag")
+	)
+
+	t.Run("basic flag operations", func(t *testing.T) {
+		assert.Equal(t, uint64(1), FlagA.Value())
+		assert.Equal(t, uint64(2), FlagB.Value())
+		assert.Equal(t, uint64(4), FlagC.Value())
+	})
+
+	t.Run("bitwise operations", func(t *testing.T) {
+		// OR operation
+		combined := FlagA.Or(FlagB)
+		assert.Equal(t, uint64(3), combined.Value())
+		assert.Equal(t, "FLAG_A|FLAG_B", combined.String())
+
+		// AND operation
+		andResult := combined.And(FlagA)
+		assert.Equal(t, uint64(1), andResult.Value())
+		assert.Equal(t, "FLAG_A|FLAG_B&FLAG_A", andResult.String())
+
+		// XOR operation
+		xorResult := combined.Xor(FlagA)
+		assert.Equal(t, uint64(2), xorResult.Value())
+		assert.Equal(t, "FLAG_A|FLAG_B^FLAG_A", xorResult.String())
+
+		// NOT operation
+		notResult := FlagA.Not()
+		assert.Equal(t, ^uint64(1), notResult.Value())
+		assert.Equal(t, "~FLAG_A", notResult.String())
+	})
+
+	t.Run("flag checks", func(t *testing.T) {
+		combined := FlagA.Or(FlagB)
+		assert.True(t, combined.HasFlag(FlagA))
+		assert.True(t, combined.HasFlag(FlagB))
+		assert.False(t, combined.HasFlag(FlagC))
+
+		empty := &CompositeEnumBase{flags: 0}
+		assert.True(t, empty.IsEmpty())
+		assert.False(t, combined.IsEmpty())
+	})
+
+	t.Run("nil handling", func(t *testing.T) {
+		var nilFlag *CompositeEnumBase
+		assert.True(t, nilFlag.IsEmpty())
+		assert.False(t, nilFlag.HasFlag(FlagA))
+		assert.Nil(t, nilFlag.Or(FlagA))
+		assert.Nil(t, nilFlag.And(FlagA))
+		assert.Nil(t, nilFlag.Xor(FlagA))
+		assert.Nil(t, nilFlag.Not())
+	})
+
+	t.Run("type conversion", func(t *testing.T) {
+		// Test with uint64 value
+		flag := NewCompositeEnumBase(uint64(8), "FLAG_D", "Fourth flag")
+		assert.Equal(t, uint64(8), flag.Value())
+
+		// Test with int value
+		flag = NewCompositeEnumBase(3, "FLAG_E", "Fifth flag")
+		assert.Equal(t, uint64(8), flag.Value()) // 1 << 3 = 8
+
+		// Test with invalid value
+		flag = NewCompositeEnumBase("invalid", "FLAG_F", "Sixth flag")
+		assert.Equal(t, uint64(0), flag.Value())
+	})
+}
