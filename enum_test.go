@@ -2,6 +2,7 @@ package goenum
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -362,5 +363,161 @@ func TestCompositeEnum(t *testing.T) {
 		// Test with invalid value
 		flag = NewCompositeEnumBase("invalid", "FLAG_F", "Sixth flag")
 		assert.Equal(t, uint64(0), flag.Value())
+	})
+}
+
+func TestEnumEdgeCases(t *testing.T) {
+	t.Run("nil enum base operations", func(t *testing.T) {
+		var nilEnum *EnumBase
+		assert.Equal(t, "", nilEnum.String())
+		assert.Nil(t, nilEnum.Value())
+		assert.False(t, nilEnum.IsValid())
+		assert.Equal(t, "", nilEnum.Description())
+		assert.False(t, nilEnum.HasAlias("any"))
+		assert.Nil(t, nilEnum.Aliases())
+		assert.Equal(t, DefaultJSONConfig(), nilEnum.GetJSONConfig())
+	})
+
+	t.Run("enum with special characters", func(t *testing.T) {
+		specialEnum := TestEnum{NewEnumBase(1, "SPECIAL!@#$%^&*()", "Special chars", "ALPHA!@#")}
+		assert.Equal(t, "SPECIAL!@#$%^&*()", specialEnum.String())
+		assert.True(t, specialEnum.HasAlias("ALPHA!@#"))
+	})
+
+	t.Run("enum with unicode characters", func(t *testing.T) {
+		unicodeEnum := TestEnum{NewEnumBase(1, "UNICODE_测试_テスト", "Unicode test", "测试", "テスト")}
+		assert.Equal(t, "UNICODE_测试_テスト", unicodeEnum.String())
+		assert.True(t, unicodeEnum.HasAlias("测试"))
+		assert.True(t, unicodeEnum.HasAlias("テスト"))
+	})
+
+	t.Run("enum with very long strings", func(t *testing.T) {
+		longName := strings.Repeat("A", 1000)
+		longDesc := strings.Repeat("B", 1000)
+		longAlias := strings.Repeat("C", 1000)
+
+		longEnum := TestEnum{NewEnumBase(1, longName, longDesc, longAlias)}
+		assert.Equal(t, longName, longEnum.String())
+		assert.Equal(t, longDesc, longEnum.Description())
+		assert.True(t, longEnum.HasAlias(longAlias))
+	})
+
+	t.Run("enum with whitespace", func(t *testing.T) {
+		whitespaceEnum := TestEnum{NewEnumBase(1, "  SPACE  ", "  Description  ", "  ALIAS  ")}
+		assert.Equal(t, "  SPACE  ", whitespaceEnum.String())
+		assert.Equal(t, "  Description  ", whitespaceEnum.Description())
+		assert.True(t, whitespaceEnum.HasAlias("  ALIAS  "))
+	})
+
+	t.Run("enum with control characters", func(t *testing.T) {
+		controlEnum := TestEnum{NewEnumBase(1, "CONTROL\n\t\r", "Desc\n\t\r", "ALIAS\n\t\r")}
+		assert.Equal(t, "CONTROL\n\t\r", controlEnum.String())
+		assert.Equal(t, "Desc\n\t\r", controlEnum.Description())
+		assert.True(t, controlEnum.HasAlias("ALIAS\n\t\r"))
+	})
+
+	t.Run("enum with zero value", func(t *testing.T) {
+		zeroEnum := TestEnum{NewEnumBase(0, "ZERO", "Zero value")}
+		assert.Equal(t, 0, zeroEnum.Value())
+		assert.True(t, zeroEnum.IsValid())
+	})
+
+	t.Run("enum with negative value", func(t *testing.T) {
+		negativeEnum := TestEnum{NewEnumBase(-1, "NEGATIVE", "Negative value")}
+		assert.Equal(t, -1, negativeEnum.Value())
+		assert.True(t, negativeEnum.IsValid())
+	})
+
+	t.Run("enum with complex value", func(t *testing.T) {
+		complexEnum := TestEnum{NewEnumBase(complex(1, 2), "COMPLEX", "Complex value")}
+		assert.Equal(t, complex(1, 2), complexEnum.Value())
+		assert.True(t, complexEnum.IsValid())
+	})
+
+	t.Run("enum with struct value", func(t *testing.T) {
+		type TestStruct struct {
+			Field1 string
+			Field2 int
+		}
+		structValue := TestStruct{"test", 123}
+		structEnum := TestEnum{NewEnumBase(structValue, "STRUCT", "Struct value")}
+		assert.Equal(t, structValue, structEnum.Value())
+		assert.True(t, structEnum.IsValid())
+	})
+
+	t.Run("enum with slice value", func(t *testing.T) {
+		sliceValue := []int{1, 2, 3}
+		sliceEnum := TestEnum{NewEnumBase(sliceValue, "SLICE", "Slice value")}
+		assert.Equal(t, sliceValue, sliceEnum.Value())
+		assert.True(t, sliceEnum.IsValid())
+	})
+
+	t.Run("enum with map value", func(t *testing.T) {
+		mapValue := map[string]int{"a": 1, "b": 2}
+		mapEnum := TestEnum{NewEnumBase(mapValue, "MAP", "Map value")}
+		assert.Equal(t, mapValue, mapEnum.Value())
+		assert.True(t, mapEnum.IsValid())
+	})
+
+	t.Run("enum with interface value", func(t *testing.T) {
+		var interfaceValue interface{} = "interface value"
+		interfaceEnum := TestEnum{NewEnumBase(interfaceValue, "INTERFACE", "Interface value")}
+		assert.Equal(t, interfaceValue, interfaceEnum.Value())
+		assert.True(t, interfaceEnum.IsValid())
+	})
+
+	t.Run("enum with nil value", func(t *testing.T) {
+		nilEnum := TestEnum{NewEnumBase(nil, "NIL", "Nil value")}
+		assert.Nil(t, nilEnum.Value())
+		assert.True(t, nilEnum.IsValid())
+	})
+
+	t.Run("enum with empty aliases", func(t *testing.T) {
+		emptyAliasesEnum := TestEnum{NewEnumBase(1, "EMPTY_ALIASES", "Empty aliases")}
+		assert.Empty(t, emptyAliasesEnum.Aliases())
+	})
+
+	t.Run("enum with duplicate aliases", func(t *testing.T) {
+		duplicateAliasesEnum := TestEnum{NewEnumBase(1, "DUPLICATE_ALIASES", "Duplicate aliases", "ALIAS", "ALIAS", "ALIAS")}
+		assert.Equal(t, []string{"ALIAS", "ALIAS", "ALIAS"}, duplicateAliasesEnum.Aliases())
+	})
+
+	t.Run("enum with case-sensitive aliases", func(t *testing.T) {
+		caseSensitiveEnum := TestEnum{NewEnumBase(1, "CASE_SENSITIVE", "Case sensitive", "Alias", "ALIAS", "alias")}
+		assert.True(t, caseSensitiveEnum.HasAlias("Alias"))
+		assert.True(t, caseSensitiveEnum.HasAlias("ALIAS"))
+		assert.True(t, caseSensitiveEnum.HasAlias("alias"))
+	})
+
+	t.Run("enum with empty alias", func(t *testing.T) {
+		emptyAliasEnum := TestEnum{NewEnumBase(1, "EMPTY_ALIAS", "Empty alias", "")}
+		assert.True(t, emptyAliasEnum.HasAlias(""))
+		assert.Equal(t, []string{""}, emptyAliasEnum.Aliases())
+	})
+
+	t.Run("enum with whitespace-only alias", func(t *testing.T) {
+		whitespaceAliasEnum := TestEnum{NewEnumBase(1, "WHITESPACE_ALIAS", "Whitespace alias", "   ")}
+		assert.True(t, whitespaceAliasEnum.HasAlias("   "))
+		assert.Equal(t, []string{"   "}, whitespaceAliasEnum.Aliases())
+	})
+
+	t.Run("enum with control characters in alias", func(t *testing.T) {
+		controlAliasEnum := TestEnum{NewEnumBase(1, "CONTROL_ALIAS", "Control alias", "\n\t\r")}
+		assert.True(t, controlAliasEnum.HasAlias("\n\t\r"))
+		assert.Equal(t, []string{"\n\t\r"}, controlAliasEnum.Aliases())
+	})
+
+	t.Run("enum with unicode in alias", func(t *testing.T) {
+		unicodeAliasEnum := TestEnum{NewEnumBase(1, "UNICODE_ALIAS", "Unicode alias", "测试", "テスト")}
+		assert.True(t, unicodeAliasEnum.HasAlias("测试"))
+		assert.True(t, unicodeAliasEnum.HasAlias("テスト"))
+		assert.Equal(t, []string{"测试", "テスト"}, unicodeAliasEnum.Aliases())
+	})
+
+	t.Run("enum with very long alias", func(t *testing.T) {
+		longAlias := strings.Repeat("A", 1000)
+		longAliasEnum := TestEnum{NewEnumBase(1, "LONG_ALIAS", "Long alias", longAlias)}
+		assert.True(t, longAliasEnum.HasAlias(longAlias))
+		assert.Equal(t, []string{longAlias}, longAliasEnum.Aliases())
 	})
 }
