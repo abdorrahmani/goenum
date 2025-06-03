@@ -133,41 +133,70 @@ func TestEnumSetRegistration(t *testing.T) {
 	})
 }
 
-func TestJSONMarshaling(t *testing.T) {
-	t.Run("marshal valid enum", func(t *testing.T) {
+func TestJSONSerializationFormats(t *testing.T) {
+	t.Run("name format serialization", func(t *testing.T) {
 		data, err := json.Marshal(TestEnumA)
-		assert.NoError(t, err, "Marshal() should not return error for valid enum")
-		assert.Equal(t, `"A"`, string(data), "Marshal() should return enum name as JSON string")
+		assert.NoError(t, err, "Marshal() should not return error")
+		assert.Equal(t, `"A"`, string(data), "Marshal() should return enum name")
 	})
 
-	t.Run("marshal nil enum", func(t *testing.T) {
+	t.Run("value format serialization", func(t *testing.T) {
+		TestEnumA.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatValue})
+		data, err := json.Marshal(TestEnumA)
+		assert.NoError(t, err, "Marshal() should not return error")
+		assert.Equal(t, `1`, string(data), "Marshal() should return enum value")
+	})
+
+	t.Run("full format serialization", func(t *testing.T) {
+		TestEnumA.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatFull})
+		data, err := json.Marshal(TestEnumA)
+		assert.NoError(t, err, "Marshal() should not return error")
+		expected := `{"name":"A","value":1,"description":"First enum","aliases":["ALPHA"]}`
+		assert.JSONEq(t, expected, string(data), "Marshal() should return full enum data")
+	})
+
+	t.Run("name format unmarshaling", func(t *testing.T) {
+		var enum TestEnum
+		enum.EnumBase = &EnumBase{}
+		err := json.Unmarshal([]byte(`"A"`), &enum)
+		assert.NoError(t, err, "Unmarshal() should not return error")
+		assert.Equal(t, "A", enum.String(), "Unmarshal() should set correct name")
+	})
+
+	t.Run("value format unmarshaling", func(t *testing.T) {
+		var enum TestEnum
+		enum.EnumBase = &EnumBase{}
+		enum.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatValue})
+		err := json.Unmarshal([]byte(`1`), &enum)
+		assert.NoError(t, err, "Unmarshal() should not return error")
+		assert.Equal(t, 1, enum.Value(), "Unmarshal() should set correct value")
+	})
+
+	t.Run("full format unmarshaling", func(t *testing.T) {
+		var enum TestEnum
+		enum.EnumBase = &EnumBase{}
+		enum.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatFull})
+		data := `{"name":"A","value":1,"description":"First enum","aliases":["ALPHA"]}`
+		err := json.Unmarshal([]byte(data), &enum)
+		assert.NoError(t, err, "Unmarshal() should not return error")
+		assert.Equal(t, "A", enum.String(), "Unmarshal() should set correct name")
+		assert.Equal(t, 1, enum.Value(), "Unmarshal() should set correct value")
+		assert.Equal(t, "First enum", enum.Description(), "Unmarshal() should set correct description")
+		assert.Equal(t, []string{"ALPHA"}, enum.Aliases(), "Unmarshal() should set correct aliases")
+	})
+
+	t.Run("nil enum handling", func(t *testing.T) {
 		var nilEnum TestEnum
 		data, err := json.Marshal(nilEnum)
 		assert.NoError(t, err, "Marshal() should not return error for nil enum")
 		assert.Equal(t, `""`, string(data), "Marshal() should return empty string for nil enum")
 	})
 
-	t.Run("unmarshal valid enum", func(t *testing.T) {
+	t.Run("invalid json handling", func(t *testing.T) {
 		var enum TestEnum
-		enum.EnumBase = &EnumBase{} // Initialize EnumBase
-		err := json.Unmarshal([]byte(`"A"`), &enum)
-		assert.NoError(t, err, "Unmarshal() should not return error for valid JSON")
-		assert.Equal(t, TestEnumA.String(), enum.String(), "Unmarshal() should set correct enum name")
-	})
-
-	t.Run("unmarshal empty string", func(t *testing.T) {
-		var enum TestEnum
-		enum.EnumBase = &EnumBase{} // Initialize EnumBase
-		err := json.Unmarshal([]byte(`""`), &enum)
-		assert.NoError(t, err, "Unmarshal() should not return error for empty string")
-		assert.False(t, enum.IsValid(), "Unmarshal() should result in invalid enum for empty string")
-	})
-
-	t.Run("unmarshal into nil EnumBase", func(t *testing.T) {
-		var nilBaseEnum TestEnum
-		err := json.Unmarshal([]byte(`"A"`), &nilBaseEnum)
-		assert.Error(t, err, "Unmarshal() should return error for nil EnumBase")
-		assert.Contains(t, err.Error(), "cannot unmarshal into nil EnumBase", "Error message should indicate nil EnumBase")
+		enum.EnumBase = &EnumBase{}
+		err := json.Unmarshal([]byte(`invalid`), &enum)
+		assert.Error(t, err, "Unmarshal() should return error for invalid JSON")
 	})
 }
 

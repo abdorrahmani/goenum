@@ -67,13 +67,40 @@ func Example() {
 		fmt.Printf("Found by alias: %s\n", status.String())
 	}
 
-	// JSON operations
+	// JSON operations with different formats
+	// Default format (name only)
 	jsonData, _ := json.Marshal(StatusActive)
-	fmt.Printf("JSON: %s\n", jsonData)
+	fmt.Printf("Default JSON: %s\n", jsonData)
 
+	// Value format
+	StatusActive.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatValue})
+	jsonData, _ = json.Marshal(StatusActive)
+	fmt.Printf("Value JSON: %s\n", jsonData)
+
+	// Full format
+	StatusActive.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatFull})
+	jsonData, _ = json.Marshal(StatusActive)
+	fmt.Printf("Full JSON: %s\n", jsonData)
+
+	// Unmarshal examples
 	var status Status
+	status.EnumBase = &EnumBase{}
+
+	// Unmarshal name format
 	_ = json.Unmarshal([]byte(`"PENDING"`), &status)
-	fmt.Printf("Unmarshaled: %s\n", status.String())
+	fmt.Printf("Unmarshaled name: %s\n", status.String())
+
+	// Unmarshal value format
+	status.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatValue})
+	_ = json.Unmarshal([]byte(`1`), &status)
+	fmt.Printf("Unmarshaled value: %v\n", status.Value())
+
+	// Unmarshal full format
+	status.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatFull})
+	fullJSON := `{"name":"ACTIVE","value":1,"description":"The item is currently active","aliases":["RUNNING","LIVE"]}`
+	_ = json.Unmarshal([]byte(fullJSON), &status)
+	fmt.Printf("Unmarshaled full: %s (value: %v, desc: %s)\n",
+		status.String(), status.Value(), status.Description())
 
 	// New utility methods examples
 	fmt.Printf("All status names: %v\n", StatusEnumSet.Names())

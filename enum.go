@@ -16,12 +16,37 @@ type Enum interface {
 	Aliases() []string
 }
 
+// JSONFormat defines how an enum should be serialized to JSON
+type JSONFormat int
+
+const (
+	// JSONFormatName serializes only the enum name (default)
+	JSONFormatName JSONFormat = iota
+	// JSONFormatValue serializes only the enum value
+	JSONFormatValue
+	// JSONFormatFull serializes a complete struct with all enum information
+	JSONFormatFull
+)
+
+// EnumJSONConfig holds configuration for JSON serialization
+type EnumJSONConfig struct {
+	Format JSONFormat
+}
+
+// DefaultJSONConfig returns the default JSON configuration
+func DefaultJSONConfig() *EnumJSONConfig {
+	return &EnumJSONConfig{
+		Format: JSONFormatName,
+	}
+}
+
 // EnumBase provides a basic implementation of Enum interface
 type EnumBase struct {
 	value       interface{}
 	name        string
 	description string
 	aliases     []string
+	jsonConfig  *EnumJSONConfig
 }
 
 // String returns the string representation of the enum
@@ -147,12 +172,48 @@ func (es *EnumSet[T]) Contains(enum T) bool {
 	return exists
 }
 
+// SetJSONConfig sets the JSON serialization configuration
+func (e *EnumBase) SetJSONConfig(config *EnumJSONConfig) {
+	if e == nil {
+		return
+	}
+	e.jsonConfig = config
+}
+
+// GetJSONConfig returns the current JSON configuration
+func (e *EnumBase) GetJSONConfig() *EnumJSONConfig {
+	if e == nil || e.jsonConfig == nil {
+		return DefaultJSONConfig()
+	}
+	return e.jsonConfig
+}
+
 // MarshalJSON implements JSON marshaling for enum
 func (e *EnumBase) MarshalJSON() ([]byte, error) {
 	if e == nil {
 		return json.Marshal("")
 	}
-	return json.Marshal(e.String())
+
+	config := e.GetJSONConfig()
+	switch config.Format {
+	case JSONFormatValue:
+		return json.Marshal(e.Value())
+	case JSONFormatFull:
+		type FullEnum struct {
+			Name        string      `json:"name"`
+			Value       interface{} `json:"value"`
+			Description string      `json:"description"`
+			Aliases     []string    `json:"aliases,omitempty"`
+		}
+		return json.Marshal(FullEnum{
+			Name:        e.name,
+			Value:       e.value,
+			Description: e.description,
+			Aliases:     e.aliases,
+		})
+	default: // JSONFormatName
+		return json.Marshal(e.String())
+	}
 }
 
 // UnmarshalJSON implements JSON unmarshaling for enum
@@ -161,12 +222,49 @@ func (e *EnumBase) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("cannot unmarshal into nil EnumBase")
 	}
 
-	var name string
-	if err := json.Unmarshal(data, &name); err != nil {
-		return err
+	config := e.GetJSONConfig()
+	switch config.Format {
+	case JSONFormatValue:
+		var value interface{}
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		// Convert float64 to int if necessary
+		if f, ok := value.(float64); ok {
+			e.value = int(f)
+		} else {
+			e.value = value
+		}
+		return nil
+	case JSONFormatFull:
+		type FullEnum struct {
+			Name        string      `json:"name"`
+			Value       interface{} `json:"value"`
+			Description string      `json:"description"`
+			Aliases     []string    `json:"aliases,omitempty"`
+		}
+		var full FullEnum
+		if err := json.Unmarshal(data, &full); err != nil {
+			return err
+		}
+		e.name = full.Name
+		// Convert float64 to int if necessary
+		if f, ok := full.Value.(float64); ok {
+			e.value = int(f)
+		} else {
+			e.value = full.Value
+		}
+		e.description = full.Description
+		e.aliases = full.Aliases
+		return nil
+	default: // JSONFormatName
+		var name string
+		if err := json.Unmarshal(data, &name); err != nil {
+			return err
+		}
+		e.name = name
+		return nil
 	}
-	e.name = name
-	return nil
 }
 
 // NewEnumBase creates a new EnumBase with the given parameters
@@ -176,6 +274,7 @@ func NewEnumBase(value interface{}, name string, description string, aliases ...
 		name:        name,
 		description: description,
 		aliases:     aliases,
+		jsonConfig:  DefaultJSONConfig(),
 	}
 }
 
