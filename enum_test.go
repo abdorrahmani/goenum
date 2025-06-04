@@ -341,6 +341,43 @@ func TestCompositeEnum(t *testing.T) {
 		assert.False(t, combined.IsEmpty())
 	})
 
+	t.Run("has all flags check", func(t *testing.T) {
+		combined := FlagA.Or(FlagB).Or(FlagC)
+		assert.True(t, combined.HasAllFlags(FlagA, FlagB))
+		assert.True(t, combined.HasAllFlags(FlagA, FlagB, FlagC))
+		assert.False(t, combined.HasAllFlags(FlagA, FlagB, FlagC, NewCompositeEnumBase(3, "FLAG_D", "Fourth flag")))
+		assert.False(t, combined.HasAllFlags())
+		assert.False(t, (*CompositeEnumBase)(nil).HasAllFlags(FlagA))
+	})
+
+	t.Run("remove flag operation", func(t *testing.T) {
+		combined := FlagA.Or(FlagB).Or(FlagC)
+
+		// Remove single flag
+		removed := combined.RemoveFlag(FlagA)
+		assert.False(t, removed.HasFlag(FlagA))
+		assert.True(t, removed.HasFlag(FlagB))
+		assert.True(t, removed.HasFlag(FlagC))
+		assert.Equal(t, uint64(6), removed.Value()) // 2 + 4
+		assert.Equal(t, "FLAG_A|FLAG_B|FLAG_C-FLAG_A", removed.String())
+
+		// Remove multiple flags
+		removed = removed.RemoveFlag(FlagB)
+		assert.False(t, removed.HasFlag(FlagA))
+		assert.False(t, removed.HasFlag(FlagB))
+		assert.True(t, removed.HasFlag(FlagC))
+		assert.Equal(t, uint64(4), removed.Value()) // 4
+		assert.Equal(t, "FLAG_A|FLAG_B|FLAG_C-FLAG_A-FLAG_B", removed.String())
+
+		// Remove non-existent flag
+		removed = removed.RemoveFlag(FlagA)
+		assert.Equal(t, uint64(4), removed.Value())
+		assert.True(t, removed.HasFlag(FlagC))
+
+		// Remove from nil
+		assert.Nil(t, (*CompositeEnumBase)(nil).RemoveFlag(FlagA))
+	})
+
 	t.Run("nil handling", func(t *testing.T) {
 		var nilFlag *CompositeEnumBase
 		assert.True(t, nilFlag.IsEmpty())

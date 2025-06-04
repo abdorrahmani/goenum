@@ -111,4 +111,24 @@ func Example() {
 		return s.Value().(int) < 2 // Filter statuses with value less than 2
 	})
 	fmt.Printf("Active statuses: %v\n", activeStatuses)
+
+	// Composite enum examples
+	var (
+		PermissionRead  = NewCompositeEnumBase(0, "READ", "Read permission")
+		PermissionWrite = NewCompositeEnumBase(1, "WRITE", "Write permission")
+		PermissionExec  = NewCompositeEnumBase(2, "EXEC", "Execute permission")
+	)
+
+	// Combine permissions
+	allPermissions := PermissionRead.Or(PermissionWrite).Or(PermissionExec)
+	fmt.Printf("All permissions: %s (value: %v)\n", allPermissions.String(), allPermissions.Value())
+
+	// Check multiple flags
+	fmt.Printf("Has read and write: %v\n", allPermissions.HasAllFlags(PermissionRead, PermissionWrite))
+	fmt.Printf("Has read and exec: %v\n", allPermissions.HasAllFlags(PermissionRead, PermissionExec))
+
+	// Remove permission
+	readWriteOnly := allPermissions.RemoveFlag(PermissionExec)
+	fmt.Printf("Read and write only: %s (value: %v)\n", readWriteOnly.String(), readWriteOnly.Value())
+	fmt.Printf("Still has exec: %v\n", readWriteOnly.HasFlag(PermissionExec))
 }

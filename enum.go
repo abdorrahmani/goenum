@@ -26,7 +26,10 @@ type CompositeEnum interface {
 	Not() CompositeEnum
 	// Checks
 	HasFlag(flag CompositeEnum) bool
+	HasAllFlags(flags ...CompositeEnum) bool
 	IsEmpty() bool
+	// Flag manipulation
+	RemoveFlag(flag CompositeEnum) CompositeEnum
 }
 
 // JSONFormat defines how an enum should be serialized to JSON
@@ -422,4 +425,33 @@ func (e *CompositeEnumBase) Value() interface{} {
 		return nil
 	}
 	return e.flags
+}
+
+// HasAllFlags checks if all given flags are present in the composite enum
+func (e *CompositeEnumBase) HasAllFlags(flags ...CompositeEnum) bool {
+	if e == nil || len(flags) == 0 {
+		return false
+	}
+	for _, flag := range flags {
+		if !e.HasFlag(flag) {
+			return false
+		}
+	}
+	return true
+}
+
+// RemoveFlag removes a specific flag from the composite enum
+func (e *CompositeEnumBase) RemoveFlag(flag CompositeEnum) CompositeEnum {
+	if e == nil || flag == nil {
+		return e
+	}
+	flagBase, ok := flag.(*CompositeEnumBase)
+	if !ok {
+		return e
+	}
+	newFlags := e.flags &^ flagBase.flags
+	return &CompositeEnumBase{
+		EnumBase: NewEnumBase(newFlags, e.name+"-"+flag.String(), e.description),
+		flags:    newFlags,
+	}
 }
