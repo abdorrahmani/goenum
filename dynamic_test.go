@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,8 +39,12 @@ func TestDynamicEnumLoading(t *testing.T) {
 	err = os.WriteFile(testFile, jsonData, 0644)
 	assert.NoError(t, err)
 
+	// Create validation options that allow duplicates
+	options := DefaultValidationOptions()
+	options.DuplicateHandling = DuplicateSkip
+
 	t.Run("LoadFromJSON", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		loader := NewDynamicEnumLoader(options)
 		err := loader.LoadFromJSON(testFile)
 		assert.NoError(t, err)
 
@@ -61,7 +66,7 @@ func TestDynamicEnumLoading(t *testing.T) {
 	})
 
 	t.Run("LoadFromDirectory", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		loader := NewDynamicEnumLoader(options)
 		err := loader.LoadFromDirectory(tempDir)
 		assert.NoError(t, err)
 
@@ -71,7 +76,7 @@ func TestDynamicEnumLoading(t *testing.T) {
 	})
 
 	t.Run("LoadFromMap", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		loader := NewDynamicEnumLoader(options)
 		definitions := map[string]EnumDefinition{
 			"TEST_A": testData[0],
 			"TEST_B": testData[1],
@@ -85,7 +90,7 @@ func TestDynamicEnumLoading(t *testing.T) {
 	})
 
 	t.Run("LoadFromSlice", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		loader := NewDynamicEnumLoader(options)
 		err := loader.LoadFromSlice(testData)
 		assert.NoError(t, err)
 
@@ -95,7 +100,7 @@ func TestDynamicEnumLoading(t *testing.T) {
 	})
 
 	t.Run("ExportToJSON", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		loader := NewDynamicEnumLoader(options)
 		err := loader.LoadFromSlice(testData)
 		assert.NoError(t, err)
 
@@ -117,20 +122,24 @@ func TestDynamicEnumLoading(t *testing.T) {
 }
 
 func TestDynamicEnumLoadingErrors(t *testing.T) {
+	// Create options that allow errors for testing error cases
+	options := DefaultValidationOptions()
+	options.DuplicateHandling = DuplicateError
+
 	t.Run("LoadFromNonExistentFile", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		loader := NewDynamicEnumLoader(options)
 		err := loader.LoadFromJSON("nonexistent.json")
 		assert.Error(t, err)
 	})
 
 	t.Run("LoadFromInvalidJSON", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		loader := NewDynamicEnumLoader(options)
 		err := loader.LoadFromReader(&invalidReader{})
 		assert.Error(t, err)
 	})
 
 	t.Run("LoadFromNonExistentDirectory", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		loader := NewDynamicEnumLoader(options)
 		err := loader.LoadFromDirectory("nonexistent")
 		assert.Error(t, err)
 	})
@@ -150,14 +159,22 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	t.Run("empty JSON array", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		options.AllowEmptyNames = true
+		options.AllowEmptyValues = true
+		options.DuplicateHandling = DuplicateSkip
+		loader := NewDynamicEnumLoader(options)
 		err := loader.LoadFromSlice([]EnumDefinition{})
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(loader.GetEnumSet().Values()))
 	})
 
 	t.Run("nil values in definition", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		options.AllowEmptyNames = true
+		options.AllowEmptyValues = true
+		options.DuplicateHandling = DuplicateSkip
+		loader := NewDynamicEnumLoader(options)
 		definitions := []EnumDefinition{
 			{
 				Name:        "TEST_NIL",
@@ -177,7 +194,11 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 	})
 
 	t.Run("empty strings in definition", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		options.AllowEmptyNames = true
+		options.AllowEmptyValues = true
+		options.DuplicateHandling = DuplicateSkip
+		loader := NewDynamicEnumLoader(options)
 		definitions := []EnumDefinition{
 			{
 				Name:        "",
@@ -197,7 +218,9 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 	})
 
 	t.Run("duplicate names in definitions", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		options.DuplicateHandling = DuplicateError
+		loader := NewDynamicEnumLoader(options)
 		definitions := []EnumDefinition{
 			{
 				Name:  "DUPLICATE",
@@ -208,13 +231,15 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 				Value: 2,
 			},
 		}
-		assert.Panics(t, func() {
-			loader.LoadFromSlice(definitions)
-		})
+		err := loader.LoadFromSlice(definitions)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate enum found")
 	})
 
 	t.Run("duplicate values in definitions", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		options.DuplicateHandling = DuplicateError
+		loader := NewDynamicEnumLoader(options)
 		definitions := []EnumDefinition{
 			{
 				Name:  "A",
@@ -225,13 +250,16 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 				Value: 1,
 			},
 		}
-		assert.Panics(t, func() {
-			loader.LoadFromSlice(definitions)
-		})
+		err := loader.LoadFromSlice(definitions)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate enum found")
 	})
 
 	t.Run("various value types", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		options.ValueType = nil                   // Allow any value type
+		options.DuplicateHandling = DuplicateSkip // Skip duplicates to avoid errors
+		loader := NewDynamicEnumLoader(options)
 		definitions := []EnumDefinition{
 			{
 				Name:  "INT",
@@ -272,7 +300,8 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 		err := os.WriteFile(invalidFile, []byte("invalid json content"), 0644)
 		assert.NoError(t, err)
 
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		loader := NewDynamicEnumLoader(options)
 		err = loader.LoadFromJSON(invalidFile)
 		assert.Error(t, err)
 	})
@@ -282,13 +311,15 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 		err := os.WriteFile(emptyFile, []byte(""), 0644)
 		assert.NoError(t, err)
 
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		loader := NewDynamicEnumLoader(options)
 		err = loader.LoadFromJSON(emptyFile)
 		assert.Error(t, err)
 	})
 
 	t.Run("export with empty enum set", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		loader := NewDynamicEnumLoader(options)
 		exportFile := filepath.Join(tempDir, "empty_export.json")
 		err := loader.ExportToJSON(exportFile)
 		assert.NoError(t, err)
@@ -300,7 +331,10 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 	})
 
 	t.Run("load from map with nil values", func(t *testing.T) {
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		options.AllowEmptyValues = true
+		options.DuplicateHandling = DuplicateSkip
+		loader := NewDynamicEnumLoader(options)
 		definitions := map[string]EnumDefinition{
 			"TEST_NIL": {
 				Name:        "TEST_NIL",
@@ -322,7 +356,8 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 		assert.NoError(t, err)
 		defer os.RemoveAll(emptyDir)
 
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		loader := NewDynamicEnumLoader(options)
 		err = loader.LoadFromDirectory(emptyDir)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no JSON files found")
@@ -351,9 +386,183 @@ func TestDynamicEnumLoadingEdgeCases(t *testing.T) {
 		err = os.WriteFile(jsonFile, jsonData, 0644)
 		assert.NoError(t, err)
 
-		loader := NewDynamicEnumLoader()
+		options := DefaultValidationOptions()
+		options.DuplicateHandling = DuplicateSkip
+		loader := NewDynamicEnumLoader(options)
 		err = loader.LoadFromDirectory(mixedDir)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(loader.GetEnumSet().Values()))
+	})
+}
+
+func TestDynamicEnumValidation(t *testing.T) {
+	t.Run("empty name validation", func(t *testing.T) {
+		options := DefaultValidationOptions()
+		loader := NewDynamicEnumLoader(options)
+		definitions := []EnumDefinition{
+			{
+				Name:  "",
+				Value: 1,
+			},
+		}
+		err := loader.LoadFromSlice(definitions)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "enum name cannot be empty")
+	})
+
+	t.Run("empty name allowed", func(t *testing.T) {
+		options := DefaultValidationOptions()
+		options.AllowEmptyNames = true
+		options.DuplicateHandling = DuplicateSkip
+		loader := NewDynamicEnumLoader(options)
+		definitions := []EnumDefinition{
+			{
+				Name:  "",
+				Value: 1,
+			},
+		}
+		err := loader.LoadFromSlice(definitions)
+		assert.NoError(t, err)
+	})
+
+	t.Run("nil value validation", func(t *testing.T) {
+		options := DefaultValidationOptions()
+		loader := NewDynamicEnumLoader(options)
+		definitions := []EnumDefinition{
+			{
+				Name:  "TEST",
+				Value: nil,
+			},
+		}
+		err := loader.LoadFromSlice(definitions)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "enum value cannot be nil")
+	})
+
+	t.Run("nil value allowed", func(t *testing.T) {
+		options := DefaultValidationOptions()
+		options.AllowEmptyValues = true
+		options.DuplicateHandling = DuplicateSkip
+		loader := NewDynamicEnumLoader(options)
+		definitions := []EnumDefinition{
+			{
+				Name:  "TEST",
+				Value: nil,
+			},
+		}
+		err := loader.LoadFromSlice(definitions)
+		assert.NoError(t, err)
+	})
+
+	t.Run("value type validation", func(t *testing.T) {
+		options := DefaultValidationOptions()
+		options.ValueType = reflect.TypeOf(0) // Expect int values
+		loader := NewDynamicEnumLoader(options)
+		definitions := []EnumDefinition{
+			{
+				Name:  "TEST",
+				Value: "string", // Wrong type
+			},
+		}
+		err := loader.LoadFromSlice(definitions)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "is not assignable to expected type")
+	})
+
+	t.Run("duplicate handling - error", func(t *testing.T) {
+		options := DefaultValidationOptions()
+		options.DuplicateHandling = DuplicateError
+		loader := NewDynamicEnumLoader(options)
+		definitions := []EnumDefinition{
+			{
+				Name:  "TEST",
+				Value: 1,
+			},
+			{
+				Name:  "TEST",
+				Value: 2,
+			},
+		}
+		err := loader.LoadFromSlice(definitions)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate enum found")
+	})
+
+	t.Run("duplicate handling - skip", func(t *testing.T) {
+		options := DefaultValidationOptions()
+		options.DuplicateHandling = DuplicateSkip
+		loader := NewDynamicEnumLoader(options)
+		definitions := []EnumDefinition{
+			{
+				Name:  "TEST",
+				Value: 1,
+			},
+			{
+				Name:  "TEST",
+				Value: 2,
+			},
+		}
+		err := loader.LoadFromSlice(definitions)
+		assert.NoError(t, err)
+		enum, exists := loader.GetEnumSet().GetByName("TEST")
+		assert.True(t, exists)
+		assert.Equal(t, 1, enum.Value()) // First value should be kept
+	})
+
+	t.Run("duplicate handling - override", func(t *testing.T) {
+		options := DefaultValidationOptions()
+		options.DuplicateHandling = DuplicateOverride
+		loader := NewDynamicEnumLoader(options)
+		definitions := []EnumDefinition{
+			{
+				Name:  "TEST",
+				Value: 1,
+			},
+			{
+				Name:  "TEST",
+				Value: 2,
+			},
+		}
+		err := loader.LoadFromSlice(definitions)
+		assert.NoError(t, err)
+		enum, exists := loader.GetEnumSet().GetByName("TEST")
+		assert.True(t, exists)
+		assert.Equal(t, 2, enum.Value()) // Second value should override
+	})
+
+	t.Run("multiple validations", func(t *testing.T) {
+		options := DefaultValidationOptions()
+		options.ValueType = reflect.TypeOf("") // Expect string values
+		options.AllowEmptyNames = false
+		options.AllowEmptyValues = false
+		options.DuplicateHandling = DuplicateError
+		loader := NewDynamicEnumLoader(options)
+
+		definitions := []EnumDefinition{
+			{
+				Name:  "", // Empty name
+				Value: "test",
+			},
+			{
+				Name:  "TEST",
+				Value: nil, // Nil value
+			},
+			{
+				Name:  "TEST2",
+				Value: 123, // Wrong type
+			},
+			{
+				Name:  "TEST3",
+				Value: "test",
+			},
+			{
+				Name:  "TEST3", // Duplicate
+				Value: "test2",
+			},
+		}
+
+		err := loader.LoadFromSlice(definitions)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "enum name cannot be empty")
 	})
 }
