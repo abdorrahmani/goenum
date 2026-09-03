@@ -32,6 +32,7 @@ GoEnum is a powerful, type-safe enumeration library for Go that leverages generi
   - [Defining Enum Types](#1-defining-enum-types)
   - [Creating Enum Sets](#2-creating-enum-sets)
   - [Working with Aliases](#3-working-with-aliases)
+- [Configuration](#configuration)
 - [Advanced Features](#advanced-features)
   - [JSON Serialization](#1-json-serialization)
   - [String-Based Enums](#2-string-based-enums)
@@ -156,6 +157,92 @@ fmt.Println(StatusActive.HasAlias("RUNNING")) // true
 // Get all aliases
 fmt.Println(StatusActive.Aliases()) // ["RUNNING"]
 ```
+
+## Configuration
+
+Enum behavior is controlled by a single `goenum.Config` value applied at
+`EnumSet` creation time. Configuration is **immutable** afterwards — there are
+no setters, no global state, and `Statuses.Config()` returns a copy.
+
+```go
+config := goenum.Config{
+    JSONFormat:      goenum.JSONFormatName,
+    CaseSensitive:   false,
+    AllowAliases:    true,
+    UnknownBehavior: goenum.UnknownError,
+}
+
+Statuses := goenum.NewEnumSet[Status](
+    goenum.WithConfig(config),
+)
+```
+
+### Options
+
+Prefer the shorter composable form — each option modifies the same underlying
+`Config`:
+
+```go
+Statuses := goenum.NewEnumSet[Status](
+    goenum.WithJSONFormat(goenum.JSONFormatValue),
+    goenum.WithCaseSensitive(false),
+    goenum.WithAliases(true),
+    goenum.WithUnknownBehavior(goenum.UnknownError),
+)
+```
+
+| Field | Meaning |
+|---|---|
+| `JSONFormat` | JSON output for registered enums: `JSONFormatName`, `JSONFormatValue`, or `JSONFormatFull` |
+| `CaseSensitive` | `true`: `ACTIVE != active`. `false`: matching ignores case |
+| `AllowAliases` | Whether aliases resolve during lookups, `Parse`, and JSON name unmarshaling. Aliases always stay in enum metadata |
+| `UnknownBehavior` | What happens for unknown names: `UnknownError` (error / not-found), `UnknownZero` (zero enum, no error), `UnknownIgnore` (like `UnknownZero`; in JSON unmarshal the target is left unchanged) |
+
+### Defaults and backward compatibility
+
+```go
+Statuses := goenum.NewEnumSet[Status]()
+```
+
+Doing nothing gives the same behavior as earlier versions: name-format JSON,
+case-insensitive lookups, aliases enabled, unknown names reported as
+not-found / errors. Invalid `JSONFormat` or `UnknownBehavior` values are
+normalized to these defaults.
+
+### Registration-time validation
+
+`Register` panics with a descriptive error when a registration would create
+ambiguity:
+
+- a name colliding with an existing name or alias under the set's
+  case-sensitivity (e.g. `ACTIVE` vs `active` when case-insensitive),
+- an alias shared by two different enums,
+- an alias equal to another enum's name.
+
+Names identical to their own alias and repeated aliases on the same enum are
+allowed.
+
+### New APIs
+
+- `goenum.Config`, `goenum.DefaultConfig`
+- `goenum.UnknownBehavior` (`UnknownError`, `UnknownZero`, `UnknownIgnore`)
+- `goenum.EnumSetOption` with `WithConfig`, `WithJSONFormat`,
+  `WithCaseSensitive`, `WithAliases`, `WithUnknownBehavior`
+- `goenum.NewEnumSet[T](options ...EnumSetOption)` — variadic, so existing
+  calls compile unchanged
+- `(*EnumSet[T]).Parse(name string) (T, error)`
+- `(*EnumSet[T]).Config() Config`
+
+The existing `SetJSONConfig` / `EnumJSONConfig` API still works and continues
+to take precedence for enums that set it explicitly after registration.
+
+### Configuration precedence
+
+1. Explicit per-enum config (`SetJSONConfig` after registration)
+2. `EnumSet` configuration (options at construction)
+3. `goenum.DefaultConfig`
+
+There is no global mutable configuration.
 
 ## 🔥 Advanced Features
 

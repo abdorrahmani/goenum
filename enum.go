@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 // Enum represents a basic enum interface
@@ -44,9 +45,17 @@ const (
 	JSONFormatFull
 )
 
-// EnumJSONConfig holds configuration for JSON serialization
+// EnumJSONConfig holds configuration for JSON serialization. EnumSet injects
+// a fully populated config (including unexported fields) into enums at
+// registration time; standalone enums use the exported fields only.
 type EnumJSONConfig struct {
 	Format JSONFormat
+
+	// resolve resolves a name (applying the owning EnumSet's case and alias
+	// rules). nil for standalone enums.
+	resolve func(name string) (Enum, bool)
+	// unknown is the UnknownBehavior of the owning EnumSet.
+	unknown UnknownBehavior
 }
 
 // DefaultJSONConfig returns the default JSON configuration
@@ -115,24 +124,74 @@ func (e *EnumBase) Aliases() []string {
 	return e.aliases
 }
 
-// NewEnumSet creates a new EnumSet instance
-func NewEnumSet[T Enum]() *EnumSet[T] {
-	return &EnumSet[T]{
+// NewEnumSet creates a new EnumSet instance. Without options the set uses
+// DefaultConfig, preserving v1 behavior: name-format JSON, case-insensitive
+// lookups, aliases enabled, unknown names reported as not-found.
+func NewEnumSet[T Enum](options ...EnumSetOption) *EnumSet[T] {
+	es := &EnumSet[T]{
 		values:  make(map[string]T),
 		byValue: make(map[interface{}]T),
+		config:  DefaultConfig,
 	}
+	for _, option := range options {
+		if option != nil {
+			option(&es.config)
+		}
+	}
+	es.config = es.config.normalized()
+	es.jsonConfig = &EnumJSONConfig{
+		Format: es.config.JSONFormat,
+		resolve: func(name string) (Enum, bool) {
+			es.mu.RLock()
+			defer es.mu.RUnlock()
+			return es.lookupName(name)
+		},
+		unknown: es.config.UnknownBehavior,
+	}
+	return es
 }
 
 // EnumSet represents a collection of enum values
 type EnumSet[T Enum] struct {
+	mu      sync.RWMutex
 	values  map[string]T
 	byValue map[interface{}]T
+
+	// Lookup maps keyed by normalized name/alias. Written only by Register
+	// under the write lock; treat as immutable afterwards for cheap reads.
+	byName  map[string]T
+	byAlias map[string]T
+
+	config     Config
+	jsonConfig *EnumJSONConfig
 }
 
-// Register adds an enum value to the set and returns the EnumSet for chaining
+// Config returns a copy of the effective configuration. Configuration is
+// immutable after construction; mutating the returned value has no effect on
+// the set.
+func (es *EnumSet[T]) Config() Config {
+	return es.config
+}
+
+// normalizeKey maps a name or alias to its lookup key. In case-insensitive
+// mode keys are uppercased so "ACTIVE" and "active" share one entry.
+func (es *EnumSet[T]) normalizeKey(s string) string {
+	if es.config.CaseSensitive {
+		return s
+	}
+	return strings.ToUpper(s)
+}
+
+// Register adds an enum value to the set and returns the EnumSet for chaining.
+// It panics on duplicate names, duplicate values and ambiguous names or
+// aliases (a name colliding with another name or alias under the set's
+// case-sensitivity, or an alias shared by two enums).
 func (es *EnumSet[T]) Register(enum T) *EnumSet[T] {
 	name := enum.String()
 	value := enum.Value()
+
+	es.mu.Lock()
+	defer es.mu.Unlock()
 
 	// Check for duplicate name
 	if _, exists := es.values[name]; exists {
@@ -144,37 +203,119 @@ func (es *EnumSet[T]) Register(enum T) *EnumSet[T] {
 		panic(fmt.Sprintf("duplicate enum value: %v", value))
 	}
 
-	es.values[name] = enum
-	es.byValue[value] = enum
-	return es
-}
-
-// GetByName retrieves an enum by its string name
-func (es *EnumSet[T]) GetByName(name string) (T, bool) {
-	enum, exists := es.values[strings.ToUpper(name)]
-	if exists {
-		return enum, true
+	// Check for case-insensitive collision with an existing name
+	nameKey := es.normalizeKey(name)
+	if existing, exists := es.byName[nameKey]; exists {
+		panic(fmt.Sprintf("ambiguous enum name %q conflicts with name %q (case-insensitive matching is enabled)", name, existing.String()))
+	}
+	if existing, exists := es.byAlias[nameKey]; exists {
+		panic(fmt.Sprintf("ambiguous enum name %q conflicts with alias %q of enum %q", name, nameKey, existing.String()))
 	}
 
-	// Check aliases
-	for _, e := range es.values {
-		if e.HasAlias(name) {
-			return e, true
+	es.values[name] = enum
+	es.byValue[value] = enum
+	if es.byName == nil {
+		es.byName = make(map[string]T)
+	}
+	es.byName[nameKey] = enum
+
+	// Index aliases. Aliases stay part of the enum metadata even when
+	// AllowAliases is disabled; only resolution is gated.
+	if es.config.AllowAliases {
+		for _, alias := range enum.Aliases() {
+			aliasKey := es.normalizeKey(alias)
+			if aliasKey == "" {
+				continue
+			}
+			if existing, exists := es.byName[aliasKey]; exists && existing.String() != name {
+				panic(fmt.Sprintf("ambiguous alias %q of enum %q conflicts with name of enum %q", alias, name, existing.String()))
+			}
+			if existing, exists := es.byAlias[aliasKey]; exists && existing.String() != name {
+				panic(fmt.Sprintf("ambiguous alias %q: used by both enum %q and enum %q", alias, existing.String(), name))
+			}
+			if es.byAlias == nil {
+				es.byAlias = make(map[string]T)
+			}
+			es.byAlias[aliasKey] = enum
 		}
 	}
 
-	var zero T
-	return zero, false
+	if es.jsonConfig != nil {
+		injectJSONConfig(enum, es.jsonConfig)
+	}
+	return es
+}
+
+// injectJSONConfig sets the shared EnumJSONConfig on enums that embed
+// *EnumBase. Enums with their own SetJSONConfig override keep their choice.
+func injectJSONConfig(enum Enum, config *EnumJSONConfig) {
+	if base, ok := enum.(interface{ SetJSONConfig(*EnumJSONConfig) }); ok {
+		base.SetJSONConfig(config)
+	}
+}
+
+// lookupName resolves a name or alias according to the set's case and alias
+// configuration. The caller chooses whether failure is an error.
+func (es *EnumSet[T]) lookupName(name string) (T, bool) {
+	if es.config.CaseSensitive {
+		if enum, exists := es.byName[name]; exists {
+			return enum, true
+		}
+	} else if enum, exists := es.byName[strings.ToUpper(name)]; exists {
+		return enum, true
+	}
+	if !es.config.AllowAliases {
+		var zero T
+		return zero, false
+	}
+	if es.config.CaseSensitive {
+		enum, exists := es.byAlias[name]
+		return enum, exists
+	}
+	enum, exists := es.byAlias[strings.ToUpper(name)]
+	return enum, exists
+}
+
+// GetByName retrieves an enum by its string name. Name matching follows the
+// set's CaseSensitive configuration; alias resolution follows AllowAliases.
+func (es *EnumSet[T]) GetByName(name string) (T, bool) {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
+	return es.lookupName(name)
 }
 
 // GetByValue retrieves an enum by its value
 func (es *EnumSet[T]) GetByValue(value interface{}) (T, bool) {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 	enum, exists := es.byValue[value]
 	return enum, exists
 }
 
+// Parse resolves a name (or alias when allowed) to a registered enum,
+// following the set's UnknownBehavior:
+//
+//   - UnknownError: returns an error for unknown names.
+//   - UnknownZero:  returns the zero enum without error.
+//   - UnknownIgnore: behaves like UnknownZero.
+func (es *EnumSet[T]) Parse(name string) (T, error) {
+	var zero T
+	enum, exists := es.lookupName(name)
+	if exists {
+		return enum, nil
+	}
+	switch es.config.UnknownBehavior {
+	case UnknownZero, UnknownIgnore:
+		return zero, nil
+	default: // UnknownError
+		return zero, fmt.Errorf("unknown enum name: %s", name)
+	}
+}
+
 // Values returns all registered enum values
 func (es *EnumSet[T]) Values() []T {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 	result := make([]T, 0, len(es.values))
 	for _, v := range es.values {
 		result = append(result, v)
@@ -184,6 +325,8 @@ func (es *EnumSet[T]) Values() []T {
 
 // Contains checks if an enum exists in the set
 func (es *EnumSet[T]) Contains(enum T) bool {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 	_, exists := es.values[enum.String()]
 	return exists
 }
@@ -278,6 +421,27 @@ func (e *EnumBase) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(data, &name); err != nil {
 			return err
 		}
+		// Enums registered in a configured EnumSet resolve and validate
+		// names against the set; standalone enums keep v1 behavior.
+		if config.resolve != nil {
+			resolved, ok := config.resolve(name)
+			if !ok {
+				switch config.unknown {
+				case UnknownZero:
+					e.name, e.value, e.description, e.aliases = "", nil, "", nil
+					return nil
+				case UnknownIgnore:
+					return nil
+				default: // UnknownError
+					return fmt.Errorf("unknown enum name: %s", name)
+				}
+			}
+			e.name = resolved.String()
+			e.value = resolved.Value()
+			e.description = resolved.Description()
+			e.aliases = resolved.Aliases()
+			return nil
+		}
 		e.name = name
 		return nil
 	}
@@ -296,6 +460,8 @@ func NewEnumBase(value interface{}, name string, description string, aliases ...
 
 // Names returns a slice of all enum names in the set
 func (es *EnumSet[T]) Names() []string {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 	names := make([]string, 0, len(es.values))
 	for name := range es.values {
 		names = append(names, name)
@@ -305,6 +471,8 @@ func (es *EnumSet[T]) Names() []string {
 
 // Map returns a map of enum names to their values
 func (es *EnumSet[T]) Map() map[string]interface{} {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 	result := make(map[string]interface{}, len(es.values))
 	for name, enum := range es.values {
 		result[name] = enum.Value()
@@ -312,10 +480,17 @@ func (es *EnumSet[T]) Map() map[string]interface{} {
 	return result
 }
 
-// Filter returns a slice of enums that satisfy the given predicate
+// Filter returns a slice of enums that satisfy the given predicate. The
+// predicate runs outside the set's lock and must not register enums.
 func (es *EnumSet[T]) Filter(predicate func(T) bool) []T {
-	result := make([]T, 0)
+	es.mu.RLock()
+	all := make([]T, 0, len(es.values))
 	for _, enum := range es.values {
+		all = append(all, enum)
+	}
+	es.mu.RUnlock()
+	result := make([]T, 0)
+	for _, enum := range all {
 		if predicate(enum) {
 			result = append(result, enum)
 		}

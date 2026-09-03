@@ -14,7 +14,7 @@ func ExampleReflection() {
 	// Create color instances
 	red := Color{NewEnumBase(1, "RED", "Red color", "PRIMARY")}
 	green := Color{NewEnumBase(2, "GREEN", "Green color", "SECONDARY")}
-	blue := Color{NewEnumBase(3, "BLUE", "Blue color", "PRIMARY")}
+	blue := Color{NewEnumBase(3, "BLUE", "Blue color", "COOL")}
 
 	// Register colors
 	colorSet := NewEnumSet[Color]()

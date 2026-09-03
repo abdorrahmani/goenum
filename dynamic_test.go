@@ -115,9 +115,9 @@ func TestDynamicEnumLoading(t *testing.T) {
 		var exported []EnumDefinition
 		err = json.Unmarshal(data, &exported)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(exported))
-		assert.Equal(t, "TEST_A", exported[0].Name)
-		assert.Equal(t, "TEST_B", exported[1].Name)
+		assert.Len(t, exported, 2)
+		names := []string{exported[0].Name, exported[1].Name}
+		assert.ElementsMatch(t, []string{"TEST_A", "TEST_B"}, names)
 	})
 }
 
