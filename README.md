@@ -1,49 +1,32 @@
-# GoEnum - A Type-Safe Enum Library for Go
+# GoEnum - Type-Safe Enums for Go
 
-[![Go Version](https://img.shields.io/badge/Go-1.18%2B-00ADD8?logo=go&logoColor=white)](https://golang.org/dl/)
+[![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white)](https://golang.org/dl/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/abdorrahmani/goenum)](https://goreportcard.com/report/github.com/abdorrahmani/goenum)
 [![License: MIT](https://img.shields.io/github/license/abdorrahmani/goenum?logo=open-source-initiative&logoColor=white)](https://github.com/abdorrahmani/goenum/blob/main/LICENSE)
-[![Coverage](https://img.shields.io/codecov/c/github/abdorrahmani/goenum?logo=codecov)](https://codecov.io/gh/abdorrahmani/goenum)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue?logo=go&logoColor=white)](https://pkg.go.dev/github.com/abdorrahmani/goenum)
-[![GitHub stars](https://img.shields.io/github/stars/abdorrahmani/goenum?style=social)](https://github.com/abdorrahmani/goenum/stargazers)
 
-GoEnum is a powerful, type-safe enumeration library for Go that leverages generics (Go 1.18+) to provide a clean, efficient, and maintainable way to work with enums. It offers a complete solution for defining enum types, managing sets of enum values, and handling common operations including JSON serialization.
-
-## 🌟 Key Features
-
-- **Type Safety**: Leverages Go generics for compile-time type checking
-- **Flexible Values**: Support for both integer and string-based enum values
-- **Rich Metadata**: Built-in support for descriptions and aliases
-- **Efficient Lookups**: Fast value and name-based lookups using maps
-- **JSON Support**: Full JSON marshaling/unmarshaling support with multiple formats
-- **Nil Safety**: All methods handle nil cases gracefully
-- **Validation**: Built-in duplicate value/name checking
-- **Extensible**: Easy to extend for custom enum types
-- **Well Tested**: Comprehensive test coverage
-- **Clean API**: Idiomatic Go code with intuitive interface
-- **Composite Enums**: Support for bitwise operations and flag combinations
-- **Dynamic Loading**: Load enums from JSON files, maps, or slices
+GoEnum is a production-grade enum toolkit for Go. Declare enums as plain
+named `int`/`uint`/`string` types, run the generator, and get strongly typed
+`String`, `Parse`, JSON, text and SQL support with **zero reflection and zero
+allocations on hot paths**.
 
 ## 📋 Table of Contents
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Basic Usage](#basic-usage)
-  - [Defining Enum Types](#1-defining-enum-types)
-  - [Creating Enum Sets](#2-creating-enum-sets)
-  - [Working with Aliases](#3-working-with-aliases)
+- [The Generator](#the-generator)
+  - [Declaration Directives](#declaration-directives)
+  - [CLI](#cli)
+  - [Generated API](#generated-api)
+- [Generic Helpers](#generic-helpers)
+- [Typed Sets](#typed-sets)
+- [JSON, Text and SQL](#json-text-and-sql)
+- [Bit Flags](#bit-flags)
 - [Configuration](#configuration)
-- [Advanced Features](#advanced-features)
-  - [JSON Serialization](#1-json-serialization)
-  - [String-Based Enums](#2-string-based-enums)
-  - [Multiple Aliases](#3-multiple-aliases)
-  - [Dynamic Enum Loading](#4-dynamic-enum-loading)
-- [Composite Enum Support](#composite-enum-support)
-  - [Creating Composite Enums](#creating-composite-enums)
-  - [Bitwise Operations](#bitwise-operations)
-  - [Type Conversion](#type-conversion)
-- [API Reference](#api-reference)
-- [Best Practices](#best-practices)
+- [Dynamic Enums](#dynamic-enums)
+- [Legacy API (EnumBase / EnumSet)](#legacy-api-enumbase--enumset)
+- [Migrating from the Legacy API](#migrating-from-the-legacy-api)
+- [Performance](#performance)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -53,412 +36,335 @@ GoEnum is a powerful, type-safe enumeration library for Go that leverages generi
 go get github.com/abdorrahmani/goenum
 ```
 
-**Requirements:**
-- Go 1.18 or higher (for generics support)
+Install the generator CLI:
+
+```bash
+go install github.com/abdorrahmani/goenum/cmd/goenum@latest
+```
+
+**Requirements:** Go 1.26 or higher (see `go.mod`).
 
 ## 🎯 Quick Start
 
-Here's a minimal example to get started:
-
 ```go
-package main
+package domain
 
-import (
-    "fmt"
-    "github.com/abdorrahmani/goenum"
-)
+//go:generate goenum generate
 
-// Define your enum type
-type Color struct {
-    *goenum.EnumBase
-}
+// Status represents the lifecycle state of an application.
+type Status int
 
-// Define enum values
-var (
-    ColorRed   = Color{goenum.NewEnumBase(1, "RED", "The color red", "CRIMSON")}
-    ColorBlue  = Color{goenum.NewEnumBase(2, "BLUE", "The color blue", "AZURE")}
-    ColorGreen = Color{goenum.NewEnumBase(3, "GREEN", "The color green", "EMERALD")}
-)
-
-// Create an enum set
-var Colors = goenum.NewEnumSet[Color]()
-
-func init() {
-    // Register enum values
-    Colors.Register(ColorRed)
-    Colors.Register(ColorBlue)
-    Colors.Register(ColorGreen)
-}
-
-func main() {
-    // Basic usage
-    fmt.Println(ColorRed.String())      // "RED"
-    fmt.Println(ColorRed.Value())       // 1
-    fmt.Println(ColorRed.Description()) // "The color red"
-    
-    // Lookup by name
-    if color, exists := Colors.GetByName("BLUE"); exists {
-        fmt.Println(color.Value()) // 2
-    }
-    
-    // Lookup by value
-    if color, exists := Colors.GetByValue(3); exists {
-        fmt.Println(color.String()) // "GREEN"
-    }
-}
-```
-
-## 📖 Basic Usage
-
-### 1. Defining Enum Types
-
-```go
-type Status struct {
-    *goenum.EnumBase
-}
-
-var (
-    StatusPending = Status{goenum.NewEnumBase(0, "PENDING", "Waiting to be processed", "WAITING")}
-    StatusActive  = Status{goenum.NewEnumBase(1, "ACTIVE", "Currently active", "RUNNING")}
-    StatusDeleted = Status{goenum.NewEnumBase(2, "DELETED", "The item has been deleted", "REMOVED")}
+const (
+	//goenum:name=PENDING
+	//goenum:description=Waiting to be processed
+	//goenum:alias=WAITING
+	StatusPending Status = iota
+	//goenum:name=ACTIVE
+	//goenum:description=Currently active
+	//goenum:alias=RUNNING
+	StatusActive
+	//goenum:name=DELETED
+	//goenum:description=The item has been deleted
+	//goenum:alias=REMOVED
+	StatusDeleted
 )
 ```
 
-### 2. Creating Enum Sets
+Run `go generate ./...` (or `goenum generate`). You get, with no hand-written
+boilerplate:
 
 ```go
-var Statuses = goenum.NewEnumSet[Status]()
+StatusActive.String()            // "ACTIVE"
+StatusActive.IsValid()           // true
+StatusActive.Description()       // "Currently active"
+StatusActive.Aliases()           // ["RUNNING"]
 
-func init() {
-    // Using chainable Register method
-    Statuses.Register(StatusPending).
-        Register(StatusActive).
-        Register(StatusDeleted)
-}
+status.ParseStatus("RUNNING")    // StatusActive, nil  (aliases, case-insensitive)
+status.MustParseStatus("ACTIVE") // StatusActive       (panics on unknown names)
+status.StatusFromValue(1)        // StatusActive, true
 
-// Or in a single line
-var Colors = goenum.NewEnumSet[Color]().
-    Register(ColorRed).
-    Register(ColorBlue).
-    Register(ColorGreen)
+goenum.Parse[Status]("active")   // StatusActive, nil  (generic helper)
+goenum.Name(StatusDeleted)       // "DELETED"
 
-// Usage
-if status, exists := Statuses.GetByName("ACTIVE"); exists {
-    fmt.Println(status.Value()) // 1
-}
+json.Marshal(StatusActive)       // "ACTIVE"
 ```
 
-### 3. Working with Aliases
+No `EnumBase`, no registration, no `interface{}` — `Status` stays a plain
+`int` you can compare, store in slices, and use as a map key.
+
+## The Generator
+
+The generator reads your source with `go/ast`, evaluates the declared
+constants (including `iota` and `1 << iota`), validates them, and writes one
+`<type>_enum_gen.go` file per enum next to the source. Output is gofmt'd,
+deterministic, and contains static lookup tables — no reflection at runtime.
+
+### Declaration Directives
+
+Metadata is declared with `//goenum:` comments, so the syntax is
+formatter-friendly and needs no custom DSL:
+
+| Directive | Where | Meaning |
+|---|---|---|
+| `//goenum:enum` | type | Opt the type into generation without per-const directives (names default to the identifier with the type prefix stripped and uppercased) |
+| `//goenum:name=X` | const | Canonical name. Defaults to the identifier with the type prefix stripped and uppercased (`StatusPending` → `PENDING`) |
+| `//goenum:description=T` | const | Human-readable description |
+| `//goenum:alias=X` | const | Additional parseable name; repeat the directive for several aliases |
+| `//goenum:ignore` | const | Skip this constant (e.g. sentinels) |
+| `//goenum:flags` | type | Treat the type as a bit-flag set (unsigned underlying type only) |
+
+Generation is **opt-in**: a type is only treated as an enum when it carries
+`//goenum:enum` or `//goenum:flags`, or when at least one of its constants
+carries a `//goenum:` directive. Plain `int` types with constants are left
+alone, so `goenum generate ./...` is safe to run over a whole repository.
+
+Supported underlying types: `int`, `int8`–`int64`, `uint`, `uint8`–`uint64`,
+`string`. Values may be literals, `iota` expressions, `1 << iota`, or simple
+arithmetic over earlier constants (including plain package constants).
+
+### CLI
+
+```bash
+goenum generate [path...]        # files, directories, or dir/... (default: .)
+goenum generate ./...            # whole repository (only opted-in enums)
+goenum generate --dry-run ./...  # report without writing
+goenum generate --force <path>   # overwrite a non-generated file at the output path
+```
+
+The generator validates declarations and fails with positioned errors
+(`file:line: Type: reason`) for duplicate names, duplicate values, duplicate
+aliases, alias/name conflicts, non-power-of-two flags, unsupported types and
+invalid directives.
+
+### Generated API
+
+For each enum `T` the generator emits:
+
+- Methods: `String`, `IsValid`, `Description`, `Aliases`, `HasAlias`
+- Functions: `ParseT(string) (T, error)`, `MustParseT(string) T`,
+  `TFromValue(v) (T, bool)`
+- Interfaces: `MarshalJSON`/`UnmarshalJSON` (name format),
+  `MarshalText`/`UnmarshalText`, `driver.Valuer`/`sql.Scanner`
+
+`Must...` functions **panic** on invalid input — use them only for constants
+and fixtures.
+
+## Generic Helpers
+
+The generated code registers its lookup table automatically, so the generic
+helpers work on any generated enum:
 
 ```go
-// Check if an enum has a specific alias
-fmt.Println(StatusActive.HasAlias("RUNNING")) // true
-
-// Get all aliases
-fmt.Println(StatusActive.Aliases()) // ["RUNNING"]
+status, err := goenum.Parse[Status]("ACTIVE")
+status := goenum.MustParse[Status]("ACTIVE")
+goenum.Valid[Status](status)
+goenum.Name(status)
+goenum.Values[Status]()   // all values, declaration order
+goenum.Names[Status]()    // all canonical names
 ```
+
+These are convenience wrappers over the same tables the generated methods
+use; prefer the type-specific `ParseStatus` when you want package-local code
+with no import of the runtime helpers.
+
+## Typed Sets
+
+`goenum.Set[T]` is a configuration-aware view over a generated enum — typed
+lookups, no registration:
+
+```go
+Statuses := goenum.NewSet[Status]()
+
+Statuses.GetByName("ACTIVE")        // (Status, bool)
+Statuses.GetByValue(StatusActive)   // (string, bool) — typed, not interface{}
+Statuses.Parse("RUNNING")           // (Status, error)
+Statuses.Contains(StatusDeleted)    // bool
+Statuses.Values()                   // []Status
+Statuses.Names()                    // []string
+Statuses.Description(StatusActive)  // string
+```
+
+## JSON, Text and SQL
+
+```go
+// JSON — name format, aliases accepted on input
+data, _ := json.Marshal(StatusActive)   // "ACTIVE"
+var s Status
+json.Unmarshal([]byte(`"RUNNING"`), &s) // StatusActive
+
+// Text — works with query params, forms, YAML, logging
+text, _ := StatusActive.MarshalText()   // "ACTIVE"
+s.UnmarshalText([]byte("active"))       // case-insensitive
+
+// SQL — stores the underlying value, scans names or values
+db.Exec("INSERT INTO users (status) VALUES (?)", StatusActive)
+db.QueryRow(...).Scan(&s)
+```
+
+Undeclared values are a marshaling error rather than silent garbage.
+
+## Bit Flags
+
+```go
+//goenum:flags
+type Permission uint64
+
+const (
+	PermissionRead Permission = 1 << iota
+	PermissionWrite
+	PermissionDelete
+)
+```
+
+Generated helpers:
+
+```go
+p := PermissionRead.Add(PermissionWrite)
+p.Has(PermissionRead)          // true
+p.Remove(PermissionWrite)      // PermissionRead
+p.String()                     // "READ|WRITE"
+ParsePermission("READ|DELETE") // combined value
+p.IsValid()                    // false if any undeclared bit is set
+```
+
+Flags are deliberately separate from scalar enums: a `//goenum:flags` type
+gets `Has`/`Add`/`Remove`/`IsEmpty` and pipe-joined parsing, not scalar
+semantics.
 
 ## Configuration
 
-Enum behavior is controlled by a single `goenum.Config` value applied at
-`EnumSet` creation time. Configuration is **immutable** afterwards — there are
-no setters, no global state, and `Statuses.Config()` returns a copy.
+Behavior of `Set[T]` (and the legacy `EnumSet`) is controlled by a single
+`goenum.Config` applied at construction time. Configuration is immutable
+afterwards; there is no global mutable state.
 
 ```go
-config := goenum.Config{
-    JSONFormat:      goenum.JSONFormatName,
-    CaseSensitive:   false,
-    AllowAliases:    true,
-    UnknownBehavior: goenum.UnknownError,
-}
-
-Statuses := goenum.NewEnumSet[Status](
-    goenum.WithConfig(config),
-)
-```
-
-### Options
-
-Prefer the shorter composable form — each option modifies the same underlying
-`Config`:
-
-```go
-Statuses := goenum.NewEnumSet[Status](
-    goenum.WithJSONFormat(goenum.JSONFormatValue),
-    goenum.WithCaseSensitive(false),
-    goenum.WithAliases(true),
-    goenum.WithUnknownBehavior(goenum.UnknownError),
+Statuses := goenum.NewSet[Status](
+	goenum.WithCaseSensitive(false),
+	goenum.WithAliases(true),
+	goenum.WithUnknownBehavior(goenum.UnknownError),
 )
 ```
 
 | Field | Meaning |
 |---|---|
-| `JSONFormat` | JSON output for registered enums: `JSONFormatName`, `JSONFormatValue`, or `JSONFormatFull` |
+| `JSONFormat` | Legacy `EnumSet` JSON output: `JSONFormatName`, `JSONFormatValue`, `JSONFormatFull`. Generated enums always marshal as names |
 | `CaseSensitive` | `true`: `ACTIVE != active`. `false`: matching ignores case |
-| `AllowAliases` | Whether aliases resolve during lookups, `Parse`, and JSON name unmarshaling. Aliases always stay in enum metadata |
-| `UnknownBehavior` | What happens for unknown names: `UnknownError` (error / not-found), `UnknownZero` (zero enum, no error), `UnknownIgnore` (like `UnknownZero`; in JSON unmarshal the target is left unchanged) |
+| `AllowAliases` | Whether aliases resolve during lookups and `Parse` |
+| `UnknownBehavior` | `UnknownError` (default), `UnknownZero` (zero value, no error), `UnknownIgnore` (like `UnknownZero`; JSON unmarshal leaves target unchanged) |
 
-### Defaults and backward compatibility
+`goenum.DefaultConfig` preserves v1 behavior: name-format JSON,
+case-insensitive lookups, aliases enabled, unknown names reported as errors.
 
-```go
-Statuses := goenum.NewEnumSet[Status]()
-```
+## Dynamic Enums
 
-Doing nothing gives the same behavior as earlier versions: name-format JSON,
-case-insensitive lookups, aliases enabled, unknown names reported as
-not-found / errors. Invalid `JSONFormat` or `UnknownBehavior` values are
-normalized to these defaults.
-
-### Registration-time validation
-
-`Register` panics with a descriptive error when a registration would create
-ambiguity:
-
-- a name colliding with an existing name or alias under the set's
-  case-sensitivity (e.g. `ACTIVE` vs `active` when case-insensitive),
-- an alias shared by two different enums,
-- an alias equal to another enum's name.
-
-Names identical to their own alias and repeated aliases on the same enum are
-allowed.
-
-### New APIs
-
-- `goenum.Config`, `goenum.DefaultConfig`
-- `goenum.UnknownBehavior` (`UnknownError`, `UnknownZero`, `UnknownIgnore`)
-- `goenum.EnumSetOption` with `WithConfig`, `WithJSONFormat`,
-  `WithCaseSensitive`, `WithAliases`, `WithUnknownBehavior`
-- `goenum.NewEnumSet[T](options ...EnumSetOption)` — variadic, so existing
-  calls compile unchanged
-- `(*EnumSet[T]).Parse(name string) (T, error)`
-- `(*EnumSet[T]).Config() Config`
-
-The existing `SetJSONConfig` / `EnumJSONConfig` API still works and continues
-to take precedence for enums that set it explicitly after registration.
-
-### Configuration precedence
-
-1. Explicit per-enum config (`SetJSONConfig` after registration)
-2. `EnumSet` configuration (options at construction)
-3. `goenum.DefaultConfig`
-
-There is no global mutable configuration.
-
-## 🔥 Advanced Features
-
-### 1. JSON Serialization
-
-The library supports three JSON serialization formats:
-- `JSONFormatName` (default): Serializes only the enum name
-- `JSONFormatValue`: Serializes only the enum value
-- `JSONFormatFull`: Serializes a complete struct with name, value, description, and aliases
+Enums whose values are only known at runtime (loaded from JSON, maps or
+slices) keep using the legacy machinery — they cannot be code-generated, and
+that is intentional:
 
 ```go
-// Default format (name only)
-data, _ := json.Marshal(StatusActive)
-fmt.Println(string(data)) // "ACTIVE"
-
-// Value format
-StatusActive.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatValue})
-data, _ = json.Marshal(StatusActive)
-fmt.Println(string(data)) // 1
-
-// Full format
-StatusActive.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatFull})
-data, _ = json.Marshal(StatusActive)
-fmt.Println(string(data)) // {"name":"ACTIVE","value":1,"description":"Currently active","aliases":["RUNNING"]}
-
-// Unmarshal examples
-var status Status
-status.EnumBase = &EnumBase{}
-
-// Unmarshal name format
-json.Unmarshal([]byte(`"PENDING"`), &status)
-
-// Unmarshal value format
-status.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatValue})
-json.Unmarshal([]byte(`1`), &status)
-
-// Unmarshal full format
-status.SetJSONConfig(&EnumJSONConfig{Format: JSONFormatFull})
-json.Unmarshal([]byte(`{"name":"ACTIVE","value":1,"description":"Currently active","aliases":["RUNNING"]}`), &status)
-```
-
-### 2. String-Based Enums
-
-```go
-type Priority struct {
-    *goenum.EnumBase
-}
-
-var (
-    PriorityLow    = Priority{goenum.NewEnumBase("low", "LOW", "Low priority task", "MINOR")}
-    PriorityMedium = Priority{goenum.NewEnumBase("medium", "MEDIUM", "Medium priority task", "NORMAL")}
-    PriorityHigh   = Priority{goenum.NewEnumBase("high", "HIGH", "High priority task", "URGENT", "CRITICAL")}
-)
-```
-
-### 3. Multiple Aliases
-
-```go
-// Define enum with multiple aliases
-StatusActive = Status{goenum.NewEnumBase(1, "ACTIVE", "Currently active", "RUNNING", "LIVE", "ONLINE")}
-
-// Check aliases
-fmt.Println(StatusActive.HasAlias("LIVE"))    // true
-fmt.Println(StatusActive.HasAlias("ONLINE"))  // true
-fmt.Println(StatusActive.Aliases())           // ["RUNNING", "LIVE", "ONLINE"]
-```
-
-### 4. Dynamic Enum Loading
-
-The library supports loading enums from various sources:
-
-```go
-// Create a loader
-loader := goenum.NewDynamicEnumLoader()
-
-// Load from JSON file
+loader := goenum.NewDynamicEnumLoader(nil)
 err := loader.LoadFromJSON("enums.json")
-if err != nil {
-    log.Fatal(err)
-}
-
-// Load from directory (all JSON files)
-err = loader.LoadFromDirectory("enums/")
-if err != nil {
-    log.Fatal(err)
-}
-
-// Load from map
-definitions := map[string]goenum.EnumDefinition{
-    "TEST_A": {
-        Name:        "TEST_A",
-        Value:       1,
-        Description: "Test enum A",
-        Aliases:     []string{"ALPHA"},
-    },
-}
-err = loader.LoadFromMap(definitions)
-
-// Load from slice
-definitions := []goenum.EnumDefinition{
-    {
-        Name:        "TEST_A",
-        Value:       1,
-        Description: "Test enum A",
-        Aliases:     []string{"ALPHA"},
-    },
-}
-err = loader.LoadFromSlice(definitions)
-
-// Export to JSON
-err = loader.ExportToJSON("exported_enums.json")
+set := loader.GetEnumSet() // *goenum.EnumSet[goenum.Enum]
 ```
 
-Example JSON format for enum definitions:
+`LoadFromJSON`, `LoadFromReader`, `LoadFromDirectory`, `LoadFromMap`,
+`LoadFromSlice` and `ExportToJSON` are supported, with `ValidationOptions`
+for duplicate handling (`DuplicateError`, `DuplicateSkip`,
+`DuplicateOverride`), value-type restrictions and empty-name/value policy.
+
+Example JSON format:
+
 ```json
 [
-  {
-    "name": "TEST_A",
-    "value": 1,
-    "description": "Test enum A",
-    "aliases": ["ALPHA"]
-  },
-  {
-    "name": "TEST_B",
-    "value": 2,
-    "description": "Test enum B",
-    "aliases": ["BETA"]
-  }
+  { "name": "TEST_A", "value": 1, "description": "Test enum A", "aliases": ["ALPHA"] }
 ]
 ```
 
-## Composite Enum Support
+## Legacy API (EnumBase / EnumSet)
 
-The library supports composite enums that can be combined using bitwise operations. This is particularly useful for flag-based enums where multiple values can be combined.
-
-### Creating Composite Enums
+The original architecture remains fully supported — it is still the right
+tool for dynamic enums and for existing code:
 
 ```go
+type Status struct {
+	*goenum.EnumBase
+}
+
 var (
-    FlagA = NewCompositeEnumBase(0, "FLAG_A", "First flag")
-    FlagB = NewCompositeEnumBase(1, "FLAG_B", "Second flag")
-    FlagC = NewCompositeEnumBase(2, "FLAG_C", "Third flag")
+	StatusPending = Status{goenum.NewEnumBase(0, "PENDING", "Waiting to be processed", "WAITING")}
+	StatusActive  = Status{goenum.NewEnumBase(1, "ACTIVE", "Currently active", "RUNNING")}
 )
+
+var Statuses = goenum.NewEnumSet[Status]().
+	Register(StatusPending).
+	Register(StatusActive)
+
+Statuses.GetByName("ACTIVE") // (Status, bool)
+Statuses.GetByValue(1)       // (Status, bool)
+Statuses.Parse("RUNNING")    // (Status, error)
 ```
 
-### Bitwise Operations
+Composite enums (`NewCompositeEnumBase`, `Or`/`And`/`Xor`/`Not`/`HasFlag`/
+`IsEmpty`) and the reflection helpers (`GetEnumMetadata`, `EnumReflection`,
+…) are likewise unchanged.
 
-Composite enums support the following bitwise operations:
+## Migrating from the Legacy API
 
-- `Or(other CompositeEnum)`: Combines two flags using bitwise OR
-- `And(other CompositeEnum)`: Combines two flags using bitwise AND
-- `Xor(other CompositeEnum)`: Combines two flags using bitwise XOR
-- `Not()`: Inverts the flags using bitwise NOT
-
-Example:
-```go
-// Combine flags
-combined := FlagA.Or(FlagB)  // Results in "FLAG_A|FLAG_B"
-
-// Check if a flag is set
-if combined.HasFlag(FlagA) {
-    // FlagA is set
-}
-
-// Check if flags are empty
-if !combined.IsEmpty() {
-    // Flags are not empty
-}
-```
-
-### Type Conversion
-
-The `NewCompositeEnumBase` function accepts various types for the flag value:
-- `uint64`: Direct flag value
-- `int`: Bit position (value will be 1 << position)
-- Other types: Will result in a zero value
-
-## 📚 API Reference
-
-### Enum Interface
+Before:
 
 ```go
-type Enum interface {
-    String() string
-    Value() interface{}
-    IsValid() bool
-    Description() string
-    HasAlias(alias string) bool
-    Aliases() []string
-}
+type Status struct{ *goenum.EnumBase }
+
+var StatusActive = Status{goenum.NewEnumBase(1, "ACTIVE", "Currently active", "RUNNING")}
+var Statuses = goenum.NewEnumSet[Status]().Register(StatusActive)
+
+s, _ := Statuses.GetByName("RUNNING")
+v := s.Value() // interface{}
 ```
 
-### EnumSet Methods
+After:
 
-- `NewEnumSet[T Enum]() *EnumSet[T]`: Creates a new enum set
-- `Register(enum T) error`: Adds an enum to the set
-- `GetByName(name string) (T, bool)`: Retrieves enum by name or alias
-- `GetByValue(value interface{}) (T, bool)`: Retrieves enum by value
-- `Contains(enum T) bool`: Checks if enum exists in set
-- `Values() []T`: Returns all registered enum values
-- `Names() []string`: Returns a slice of all enum names
-- `Map() map[string]interface{}`: Returns a map of enum names to their values
-- `Filter(predicate func(T) bool) []T`: Returns a slice of enums that satisfy the given predicate
+```go
+type Status int
 
-## 💡 Best Practices
+const (
+	//goenum:name=ACTIVE
+	//goenum:description=Currently active
+	//goenum:alias=RUNNING
+	StatusActive Status = 1
+)
 
-1. **Initialization**: Always register enum values in an `init()` function
-2. **Naming**: Use uppercase names for enum values (e.g., `StatusActive`)
-3. **Descriptions**: Provide meaningful descriptions for better documentation
-4. **Aliases**: Use aliases for common alternative names
-5. **Error Handling**: Check registration errors in `init()`
-6. **Type Safety**: Use type-safe enums for better compile-time checking
-7. **JSON**: Implement custom JSON methods when embedding in structs
-8. **Validation**: Keep enum values unique within a set
-9. **Composite Enums**: Use bitwise operations for flag combinations
-10. **Dynamic Loading**: Validate enum definitions before loading
+// go:generate goenum generate
+
+s, _ := ParseStatus("RUNNING") // Status
+v := int(s)                    // typed
+```
+
+Steps:
+
+1. Replace the struct + `EnumBase` with a named basic type and constants.
+2. Move names/descriptions/aliases into `//goenum:` directives.
+3. Add `//go:generate goenum generate` and run `go generate ./...`.
+4. Swap `Statuses.GetByName`/`GetByValue` calls for the generated `Parse…`/
+   `…FromValue` functions or `goenum.Set[T]`.
+5. Delete the manual `init()` registration.
+
+The two styles can coexist in the same package during migration.
+
+## Performance
+
+`go test -bench .` on this repository (generated vs legacy, same enum):
+
+| Operation | Legacy | Generated |
+|---|---|---|
+| Parse by name | 26.1 ns | 25.6 ns |
+| Parse by alias | 43.8 ns | 30.7 ns |
+| Lookup by value | 20.1 ns | 5.3 ns |
+| JSON unmarshal | 394 ns / 3 allocs | 380 ns / 2 allocs |
+
+All hot paths are allocation-free and reflection-free. `String()`/`IsValid()`
+are a single map lookup (~5 ns); the legacy field read is marginally faster
+there, while the generated path wins everywhere a lookup table is involved.
 
 ## 🤝 Contributing
 
@@ -472,17 +378,18 @@ We welcome contributions! Please follow these steps:
 6. Open a Pull Request
 
 Please ensure:
-- Code follows Go conventions
-- Tests pass
+- Code follows Go conventions (`go vet ./...`, `gofmt`)
+- Tests pass (`go test ./...`)
+- Generated files are regenerated (`go generate ./...`)
 - Documentation is updated
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE)
+file for details.
 
 ## 🙏 Acknowledgments
 
-- Built with Go 1.18+ generics
-- Inspired by enum implementations in Java and C#
+- Built with Go generics and `go/ast` code generation
 - Uses `github.com/stretchr/testify` for testing
 - Created with ❤️ by [abdorrahmani](https://github.com/abdorrahmani)

@@ -7,7 +7,14 @@ import (
 	"sync"
 )
 
-// Enum represents a basic enum interface
+// Enum represents a basic enum interface.
+//
+// Legacy: this interface and the EnumBase/EnumSet machinery exist for
+// backward compatibility and for dynamic enums (DynamicEnumLoader), where
+// values are only known at runtime. For new code prefer the modern API:
+// declare a named int/uint/string type, run `goenum generate`, and use the
+// generated methods plus goenum.Parse[T] / goenum.Set[T] — no interface{},
+// no registration, compile-time type safety.
 type Enum interface {
 	String() string
 	Value() interface{}
@@ -65,7 +72,10 @@ func DefaultJSONConfig() *EnumJSONConfig {
 	}
 }
 
-// EnumBase provides a basic implementation of Enum interface
+// EnumBase provides a basic implementation of Enum interface.
+//
+// Legacy: generated enums do not embed EnumBase. It remains the runtime
+// representation for dynamic enums loaded by DynamicEnumLoader.
 type EnumBase struct {
 	value       interface{}
 	name        string
@@ -151,7 +161,11 @@ func NewEnumSet[T Enum](options ...EnumSetOption) *EnumSet[T] {
 	return es
 }
 
-// EnumSet represents a collection of enum values
+// EnumSet represents a collection of enum values.
+//
+// Legacy: for generated enums use the typed goenum.Set[T], which needs no
+// registration and takes typed values. EnumSet remains the container for
+// dynamic enums.
 type EnumSet[T Enum] struct {
 	mu      sync.RWMutex
 	values  map[string]T
