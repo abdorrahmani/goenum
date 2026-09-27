@@ -191,3 +191,108 @@ func TestLegacyInteropUnaffected(t *testing.T) {
 	assert.Equal(t, 1, base.Value())
 	assert.True(t, errors.Is(goenum.ErrUnknownEnum, goenum.ErrUnknownEnum))
 }
+
+// TestGeneratedStringBackedFullAPI exercises the string-backed generated
+// methods left uncovered by TestGeneratedStringBackedAPI: metadata accessors,
+// text/SQL marshaling, MustParse and undeclared-value rendering.
+func TestGeneratedStringBackedFullAPI(t *testing.T) {
+	assert.Equal(t, "Low priority task", PriorityLow.Description())
+	assert.Equal(t, []string{"URGENT"}, PriorityHigh.Aliases())
+	assert.Empty(t, PriorityLow.Aliases())
+	assert.True(t, PriorityHigh.HasAlias("urgent"))
+	assert.False(t, PriorityLow.HasAlias("urgent"))
+
+	assert.Equal(t, PriorityHigh, MustParsePriority("HIGH"))
+	assert.Panics(t, func() { MustParsePriority("nope") })
+
+	// Undeclared value renders quoted and does not resolve.
+	assert.Equal(t, `Priority("nope")`, Priority("nope").String())
+	assert.False(t, Priority("nope").IsValid())
+	_, ok := PriorityFromValue("nope")
+	assert.False(t, ok)
+
+	// Text marshaling round-trips names and accepts aliases.
+	text, err := PriorityHigh.MarshalText()
+	require.NoError(t, err)
+	assert.Equal(t, "HIGH", string(text))
+	var p Priority
+	require.NoError(t, p.UnmarshalText([]byte("urgent")))
+	assert.Equal(t, PriorityHigh, p)
+
+	// SQL: Value stores the underlying string; Scan accepts nil/string/[]byte.
+	v, err := PriorityLow.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "low", v)
+	_, err = Priority("nope").Value()
+	assert.Error(t, err)
+
+	require.NoError(t, p.Scan("URGENT"))
+	assert.Equal(t, PriorityHigh, p)
+	require.NoError(t, p.Scan([]byte("LOW")))
+	assert.Equal(t, PriorityLow, p)
+	require.NoError(t, p.Scan(nil))
+	assert.Equal(t, Priority(""), p)
+	assert.Error(t, p.Scan(42)) // unsupported source type
+}
+
+// TestGeneratedFlagsFullAPI exercises the flags-generated methods left
+// uncovered by TestGeneratedFlags: metadata accessors, MustParse, text/SQL
+// marshaling, FromValue and undeclared-bit handling.
+func TestGeneratedFlagsFullAPI(t *testing.T) {
+	// Single declared flags carry no description/alias here, but the
+	// accessors must still resolve without panicking.
+	assert.Equal(t, "", PermissionRead.Description())
+	assert.Empty(t, PermissionRead.Aliases())
+	assert.False(t, PermissionRead.HasAlias("anything"))
+
+	assert.Equal(t, PermissionRead.Add(PermissionWrite), MustParsePermission("READ|WRITE"))
+	assert.Panics(t, func() { MustParsePermission("READ|NOPE") })
+
+	// Undeclared bits render alongside known ones and fail validation.
+	assert.Equal(t, "Permission(8)", Permission(8).String())
+	assert.Equal(t, "READ|Permission(8)", Permission(1|8).String())
+	_, ok := PermissionFromValue(8)
+	assert.False(t, ok)
+	rw, ok := PermissionFromValue(1 | 2)
+	assert.True(t, ok)
+	assert.Equal(t, PermissionRead.Add(PermissionWrite), rw)
+
+	// Text marshaling round-trips the "|"-joined form.
+	text, err := PermissionRead.Add(PermissionWrite).MarshalText()
+	require.NoError(t, err)
+	assert.Equal(t, "READ|WRITE", string(text))
+	var p Permission
+	require.NoError(t, p.UnmarshalText([]byte("read|delete")))
+	assert.Equal(t, PermissionRead.Add(PermissionDelete), p)
+
+	// SQL: Value stores the bit pattern; Scan accepts nil/int64/string/[]byte.
+	v, err := PermissionRead.Add(PermissionWrite).Value()
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), v)
+	_, err = Permission(8).Value()
+	assert.Error(t, err)
+
+	require.NoError(t, p.Scan(int64(3)))
+	assert.Equal(t, PermissionRead.Add(PermissionWrite), p)
+	require.NoError(t, p.Scan("WRITE"))
+	assert.Equal(t, PermissionWrite, p)
+	require.NoError(t, p.Scan([]byte("READ")))
+	assert.Equal(t, PermissionRead, p)
+	require.NoError(t, p.Scan(nil))
+	assert.Equal(t, Permission(0), p)
+	assert.Error(t, p.Scan(int64(8))) // undeclared bit
+	assert.Error(t, p.Scan(3.5))      // unsupported source type
+}
+
+// TestGeneratedUndeclaredValueErrors covers the marshaling guards that reject
+// undeclared values so bad data never round-trips silently.
+func TestGeneratedUndeclaredValueErrors(t *testing.T) {
+	_, err := Status(9).Value()
+	assert.Error(t, err)
+	_, err = Status(9).MarshalText()
+	assert.Error(t, err)
+	_, err = Permission(8).MarshalJSON()
+	assert.Error(t, err)
+	_, err = Permission(8).MarshalText()
+	assert.Error(t, err)
+}
