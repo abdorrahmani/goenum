@@ -57,14 +57,22 @@ type DynamicEnumLoader struct {
 	options *ValidationOptions
 }
 
-// NewDynamicEnumLoader creates a new DynamicEnumLoader instance
-func NewDynamicEnumLoader(options *ValidationOptions) *DynamicEnumLoader {
-	if options == nil {
-		options = DefaultValidationOptions()
+// NewDynamicEnumLoader creates a new DynamicEnumLoader instance.
+//
+// ValidationOptions are optional: call NewDynamicEnumLoader() (or pass nil) to
+// use DefaultValidationOptions, or pass a single *ValidationOptions to customize
+// validation and duplicate handling. Only the first argument is used.
+func NewDynamicEnumLoader(options ...*ValidationOptions) *DynamicEnumLoader {
+	var opts *ValidationOptions
+	if len(options) > 0 {
+		opts = options[0]
+	}
+	if opts == nil {
+		opts = DefaultValidationOptions()
 	}
 	return &DynamicEnumLoader{
 		enumSet: NewEnumSet[Enum](),
-		options: options,
+		options: opts,
 	}
 }
 
