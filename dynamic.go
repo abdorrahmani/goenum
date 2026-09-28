@@ -92,27 +92,49 @@ func (l *DynamicEnumLoader) validateEnumDefinition(def EnumDefinition) error {
 	return nil
 }
 
-// handleDuplicate handles duplicate enum according to the options
-func (l *DynamicEnumLoader) handleDuplicate(name string, value interface{}) error {
-	switch l.options.DuplicateHandling {
-	case DuplicateError:
-		return fmt.Errorf("duplicate enum found: name=%s, value=%v", name, value)
-	case DuplicateSkip:
-		return nil // Skip this enum
-	case DuplicateOverride:
-		// Remove existing enum before adding new one
-		if _, exists := l.enumSet.GetByName(name); exists {
-			// Create a new set and copy all enums except the one to override
-			newSet := NewEnumSet[Enum]()
-			for _, enum := range l.enumSet.Values() {
-				if enum.String() != name {
-					newSet.Register(enum)
-				}
-			}
-			l.enumSet = newSet
+// add validates one definition, applies the configured duplicate handling and
+// registers it. It is the single path shared by LoadFromReader, LoadFromMap
+// and LoadFromSlice, so all three agree on validation, duplicate detection
+// (by name and by value) and error reporting.
+func (l *DynamicEnumLoader) add(def EnumDefinition) error {
+	if err := l.validateEnumDefinition(def); err != nil {
+		return fmt.Errorf("invalid enum definition: %w", err)
+	}
+	_, dupName := l.enumSet.GetByName(def.Name)
+	_, dupValue := l.enumSet.GetByValue(def.Value)
+	if dupName || dupValue {
+		switch l.options.DuplicateHandling {
+		case DuplicateSkip:
+			return nil
+		case DuplicateOverride:
+			l.overrideRemove(def.Name, def.Value)
+		default: // DuplicateError
+			return fmt.Errorf("duplicate enum found: name=%s, value=%v", def.Name, def.Value)
 		}
 	}
+	l.enumSet.Register(&EnumBase{
+		name:        def.Name,
+		value:       def.Value,
+		description: def.Description,
+		aliases:     def.Aliases,
+		jsonConfig:  DefaultJSONConfig(),
+	})
 	return nil
+}
+
+// overrideRemove drops any registered enum sharing the given name or value so
+// the replacement can be registered without a duplicate panic.
+// ponytail: O(n) rebuild per override; fine for load-time use, revisit if
+// overriding into large sets in a hot path.
+func (l *DynamicEnumLoader) overrideRemove(name string, value interface{}) {
+	newSet := NewEnumSet[Enum]()
+	for _, enum := range l.enumSet.Values() {
+		if enum.String() == name || enum.Value() == value {
+			continue
+		}
+		newSet.Register(enum)
+	}
+	l.enumSet = newSet
 }
 
 // LoadFromJSON loads enum definitions from a JSON file
@@ -134,32 +156,13 @@ func (l *DynamicEnumLoader) LoadFromReader(reader io.Reader) error {
 	}
 
 	for _, def := range definitions {
-		// Validate the enum definition
-		if err := l.validateEnumDefinition(def); err != nil {
-			return fmt.Errorf("invalid enum definition: %w", err)
-		}
-
-		// Handle duplicates
-		if err := l.handleDuplicate(def.Name, def.Value); err != nil {
-			if l.options.DuplicateHandling == DuplicateError {
-				return err
-			}
-			continue // Skip this enum for DuplicateSkip
-		}
-
-		// Convert float64 to int if necessary
+		// JSON numbers decode as float64; enum values are usually ints.
 		if f, ok := def.Value.(float64); ok {
 			def.Value = int(f)
 		}
-
-		enum := &EnumBase{
-			name:        def.Name,
-			value:       def.Value,
-			description: def.Description,
-			aliases:     def.Aliases,
-			jsonConfig:  DefaultJSONConfig(),
+		if err := l.add(def); err != nil {
+			return err
 		}
-		l.enumSet.Register(enum)
 	}
 
 	return nil
@@ -198,27 +201,9 @@ func (l *DynamicEnumLoader) GetEnumSet() *EnumSet[Enum] {
 // LoadFromMap loads enum definitions from a map
 func (l *DynamicEnumLoader) LoadFromMap(definitions map[string]EnumDefinition) error {
 	for _, def := range definitions {
-		// Validate the enum definition
-		if err := l.validateEnumDefinition(def); err != nil {
-			return fmt.Errorf("invalid enum definition: %w", err)
+		if err := l.add(def); err != nil {
+			return err
 		}
-
-		// Handle duplicates
-		if err := l.handleDuplicate(def.Name, def.Value); err != nil {
-			if l.options.DuplicateHandling == DuplicateError {
-				return err
-			}
-			continue // Skip this enum for DuplicateSkip
-		}
-
-		enum := &EnumBase{
-			name:        def.Name,
-			value:       def.Value,
-			description: def.Description,
-			aliases:     def.Aliases,
-			jsonConfig:  DefaultJSONConfig(),
-		}
-		l.enumSet.Register(enum)
 	}
 	return nil
 }
@@ -226,41 +211,8 @@ func (l *DynamicEnumLoader) LoadFromMap(definitions map[string]EnumDefinition) e
 // LoadFromSlice loads enum definitions from a slice
 func (l *DynamicEnumLoader) LoadFromSlice(definitions []EnumDefinition) error {
 	for _, def := range definitions {
-		// Validate the enum definition
-		if err := l.validateEnumDefinition(def); err != nil {
-			return fmt.Errorf("invalid enum definition: %w", err)
-		}
-
-		// Handle duplicates
-		if err := l.handleDuplicate(def.Name, def.Value); err != nil {
-			if l.options.DuplicateHandling == DuplicateError {
-				return err
-			}
-			continue // Skip this enum for DuplicateSkip
-		}
-
-		// Create a new enum set if we need to override
-		if l.options.DuplicateHandling == DuplicateOverride {
-			newSet := NewEnumSet[Enum]()
-			for _, enum := range l.enumSet.Values() {
-				if enum.String() != def.Name {
-					newSet.Register(enum)
-				}
-			}
-			l.enumSet = newSet
-		}
-
-		enum := &EnumBase{
-			name:        def.Name,
-			value:       def.Value,
-			description: def.Description,
-			aliases:     def.Aliases,
-			jsonConfig:  DefaultJSONConfig(),
-		}
-
-		// Only register if we're not skipping
-		if l.options.DuplicateHandling != DuplicateSkip || !l.enumSet.Contains(enum) {
-			l.enumSet.Register(enum)
+		if err := l.add(def); err != nil {
+			return err
 		}
 	}
 	return nil

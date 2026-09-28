@@ -41,7 +41,10 @@ func (s *Status) UnmarshalJSON(data []byte) error {
 	return s.EnumBase.UnmarshalJSON(data)
 }
 
-// Example demonstrates the usage of the improved enum package
+// Example demonstrates the usage of the improved enum package.
+//
+// Deprecated: demo code that ships in the importable package; see
+// example/status for the current generated API. Slated for removal in v2.
 func Example() {
 	// Basic enum operations
 	fmt.Printf("Status: %s, Value: %v, Description: %s\n",

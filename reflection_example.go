@@ -4,7 +4,10 @@ import (
 	"fmt"
 )
 
-// ExampleReflection demonstrates the usage of reflection features
+// ExampleReflection demonstrates the usage of reflection features.
+//
+// Deprecated: demo code that ships in the importable package; see
+// example/status for the current generated API. Slated for removal in v2.
 func ExampleReflection() {
 	// Create an enum set for colors
 	type Color struct {
@@ -83,7 +86,10 @@ func ExampleReflection() {
 	}
 }
 
-// ExampleReflectionWithTags demonstrates the usage of reflection with struct tags
+// ExampleReflectionWithTags demonstrates the usage of reflection with struct tags.
+//
+// Deprecated: demo code that ships in the importable package; see
+// example/status for the current generated API. Slated for removal in v2.
 func ExampleReflectionWithTags() {
 	// Create an enum with tags
 	type TaggedEnum struct {
@@ -131,7 +137,10 @@ func ExampleReflectionWithTags() {
 	}
 }
 
-// ExampleReflectionWithComposite demonstrates the usage of reflection with composite enums
+// ExampleReflectionWithComposite demonstrates the usage of reflection with composite enums.
+//
+// Deprecated: demo code that ships in the importable package; see
+// example/status for the current generated API. Slated for removal in v2.
 func ExampleReflectionWithComposite() {
 	// Create a reflection instance for composite enums
 	type CompositeEnum struct {

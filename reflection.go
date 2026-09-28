@@ -29,7 +29,10 @@ type EnumField struct {
 	IsExported bool
 }
 
-// GetEnumMetadata returns reflection-based metadata about an enum type
+// GetEnumMetadata returns reflection-based metadata about an enum type.
+//
+// Deprecated: unused reflection helper; prefer the generated API (goenum
+// generate) or Set[T]. Slated for removal in v2.
 func GetEnumMetadata[T Enum](enum T) (*EnumMetadata, error) {
 	if reflect.ValueOf(enum).IsNil() {
 		return nil, fmt.Errorf("cannot get metadata for nil enum")
@@ -88,7 +91,10 @@ func isCompositeEnum(enum Enum) bool {
 	return ok
 }
 
-// GetEnumValueType returns the type of an enum's value
+// GetEnumValueType returns the type of an enum's value.
+//
+// Deprecated: unused reflection helper; prefer the generated API (goenum
+// generate) or Set[T]. Slated for removal in v2.
 func GetEnumValueType[T Enum](enum T) reflect.Type {
 	if reflect.ValueOf(enum).IsNil() {
 		return nil
@@ -96,7 +102,10 @@ func GetEnumValueType[T Enum](enum T) reflect.Type {
 	return reflect.TypeOf(enum.Value())
 }
 
-// GetEnumFieldValue returns the value of a specific field in an enum
+// GetEnumFieldValue returns the value of a specific field in an enum.
+//
+// Deprecated: unused reflection helper; prefer the generated API (goenum
+// generate) or Set[T]. Slated for removal in v2.
 func GetEnumFieldValue[T Enum](enum T, fieldName string) (interface{}, error) {
 	if reflect.ValueOf(enum).IsNil() {
 		return nil, fmt.Errorf("cannot get field value from nil enum")
@@ -115,7 +124,10 @@ func GetEnumFieldValue[T Enum](enum T, fieldName string) (interface{}, error) {
 	return field.Interface(), nil
 }
 
-// GetEnumTagValue returns the value of a specific tag on an enum field
+// GetEnumTagValue returns the value of a specific tag on an enum field.
+//
+// Deprecated: unused reflection helper; prefer the generated API (goenum
+// generate) or Set[T]. Slated for removal in v2.
 func GetEnumTagValue[T Enum](enum T, fieldName, tagName string) (string, error) {
 	if reflect.ValueOf(enum).IsNil() {
 		return "", fmt.Errorf("cannot get tag value from nil enum")
@@ -134,7 +146,10 @@ func GetEnumTagValue[T Enum](enum T, fieldName, tagName string) (string, error) 
 	return field.Tag.Get(tagName), nil
 }
 
-// GetEnumFields returns all fields of an enum type
+// GetEnumFields returns all fields of an enum type.
+//
+// Deprecated: unused reflection helper; prefer the generated API (goenum
+// generate) or Set[T]. Slated for removal in v2.
 func GetEnumFields[T Enum](enum T) ([]EnumField, error) {
 	if reflect.ValueOf(enum).IsNil() {
 		return nil, fmt.Errorf("cannot get fields from nil enum")
@@ -171,7 +186,10 @@ func GetEnumFields[T Enum](enum T) ([]EnumField, error) {
 	return fields, nil
 }
 
-// GetEnumMethods returns all methods of an enum type
+// GetEnumMethods returns all methods of an enum type.
+//
+// Deprecated: unused reflection helper; prefer the generated API (goenum
+// generate) or Set[T]. Slated for removal in v2.
 func GetEnumMethods[T Enum](enum T) ([]string, error) {
 	if reflect.ValueOf(enum).IsNil() {
 		return nil, fmt.Errorf("cannot get methods from nil enum")
@@ -188,17 +206,26 @@ func GetEnumMethods[T Enum](enum T) ([]string, error) {
 	return methods, nil
 }
 
-// IsEnumType checks if a type implements the Enum interface
+// IsEnumType checks if a type implements the Enum interface.
+//
+// Deprecated: unused reflection helper; prefer the generated API (goenum
+// generate) or Set[T]. Slated for removal in v2.
 func IsEnumType(t reflect.Type) bool {
 	return t.Implements(reflect.TypeOf((*Enum)(nil)).Elem())
 }
 
-// IsCompositeEnumType checks if a type implements the CompositeEnum interface
+// IsCompositeEnumType checks if a type implements the CompositeEnum interface.
+//
+// Deprecated: unused reflection helper; prefer the generated API (goenum
+// generate) or Set[T]. Slated for removal in v2.
 func IsCompositeEnumType(t reflect.Type) bool {
 	return t.Implements(reflect.TypeOf((*CompositeEnum)(nil)).Elem())
 }
 
-// GetEnumTypeInfo returns information about an enum type
+// GetEnumTypeInfo returns information about an enum type.
+//
+// Deprecated: unused reflection helper; prefer the generated API (goenum
+// generate) or Set[T]. Slated for removal in v2.
 func GetEnumTypeInfo[T Enum](enum T) (map[string]interface{}, error) {
 	if reflect.ValueOf(enum).IsNil() {
 		return nil, fmt.Errorf("cannot get type info from nil enum")
@@ -232,7 +259,11 @@ func GetEnumTypeInfo[T Enum](enum T) (map[string]interface{}, error) {
 	return info, nil
 }
 
-// EnumReflection provides reflection-based utilities for working with enums
+// EnumReflection provides reflection-based utilities for working with enums.
+//
+// Deprecated: this wrapper calls EnumSet methods via reflection that callers
+// can invoke directly on a typed *EnumSet[T]. Prefer the generated API
+// (goenum generate) or Set[T]. Slated for removal in v2.
 type EnumReflection struct {
 	// Type is the reflect.Type of the enum struct
 	Type reflect.Type
@@ -240,7 +271,9 @@ type EnumReflection struct {
 	EnumSet reflect.Value
 }
 
-// NewEnumReflection creates a new EnumReflection instance for the given enum type
+// NewEnumReflection creates a new EnumReflection instance for the given enum type.
+//
+// Deprecated: see EnumReflection. Slated for removal in v2.
 func NewEnumReflection[T Enum](enumSet *EnumSet[T]) *EnumReflection {
 	var zero T
 	return &EnumReflection{

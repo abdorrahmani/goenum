@@ -99,6 +99,16 @@ func TestDynamicEnumLoading(t *testing.T) {
 		assert.Equal(t, 2, len(enumSet.Values()))
 	})
 
+	t.Run("default options load distinct data", func(t *testing.T) {
+		// Regression: a default loader (DuplicateError) must load distinct
+		// definitions. It previously errored on the first element because
+		// duplicate handling did not check for an actual duplicate.
+		loader := NewDynamicEnumLoader(DefaultValidationOptions())
+		err := loader.LoadFromSlice(testData)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(loader.GetEnumSet().Values()))
+	})
+
 	t.Run("ExportToJSON", func(t *testing.T) {
 		loader := NewDynamicEnumLoader(options)
 		err := loader.LoadFromSlice(testData)
