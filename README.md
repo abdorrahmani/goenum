@@ -1,6 +1,6 @@
 # GoEnum - Type-Safe Enums for Go
 
-[![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white)](https://golang.org/dl/)
+[![Go Version](https://img.shields.io/badge/Go-1.21%2B-00ADD8?logo=go&logoColor=white)](https://golang.org/dl/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/abdorrahmani/goenum)](https://goreportcard.com/report/github.com/abdorrahmani/goenum)
 [![License: MIT](https://img.shields.io/github/license/abdorrahmani/goenum?logo=open-source-initiative&logoColor=white)](https://github.com/abdorrahmani/goenum/blob/main/LICENSE)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue?logo=go&logoColor=white)](https://pkg.go.dev/github.com/abdorrahmani/goenum)
@@ -42,7 +42,7 @@ Install the generator CLI:
 go install github.com/abdorrahmani/goenum/cmd/goenum@latest
 ```
 
-**Requirements:** Go 1.26 or higher (see `go.mod`).
+**Requirements:** Go 1.21 or higher (see `go.mod`).
 
 ## 🎯 Quick Start
 

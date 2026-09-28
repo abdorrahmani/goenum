@@ -1,6 +1,6 @@
 module github.com/abdorrahmani/goenum
 
-go 1.26.5
+go 1.21
 
 require github.com/stretchr/testify v1.12.0
 
